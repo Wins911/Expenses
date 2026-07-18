@@ -139,7 +139,7 @@ select{padding-right:36px}
 /* CUBE HEATMAP */
 .cube-category{margin-bottom:16px}
 .cube-cat-name{font-size:12px;font-weight:700;color:var(--txt);text-align:center;margin-bottom:6px;letter-spacing:.2px}
-.month-cubes{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;align-items:end;height:32px} /* Вирівнюємо по низу і задаємо фіксовану висоту рядка */
+.month-cubes{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;align-items:end;height:48px} /* Вирівнюємо по низу і задаємо фіксовану висоту рядка */
 .cube{border-radius:2px;cursor:pointer;transition:transform .1s;min-width:0} /* Прибрали aspect-ratio, щоб висота могла змінюватися */
 .cube:active{transform:scale(.85)}
 .cube-legend{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;justify-content:center}
@@ -1080,7 +1080,7 @@ function makeCubeHeatmap(title,sheetData,color){
       // ДИНАМІЧНИЙ РОЗРАХУНОК ВИСОТИ
       // Якщо значення 0 — висота 3px (мінімальна лінія), якщо більше нуля — масштабуємо від 4px до 32px (макс. висота)
       const minH = 3;
-      const maxH = 32;
+      const maxH = 48;
       const calculatedHeight = val > 0 ? Math.max(4, Math.round((val / maxV) * maxH)) : minH;
       cube.style.height = calculatedHeight + 'px';
 
