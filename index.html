@@ -139,8 +139,8 @@ select{padding-right:36px}
 /* CUBE HEATMAP */
 .cube-category{margin-bottom:16px}
 .cube-cat-name{font-size:12px;font-weight:700;color:var(--txt);text-align:center;margin-bottom:6px;letter-spacing:.2px}
-.month-cubes{display:grid;grid-template-columns:repeat(12,1fr);gap:3px}
-.cube{aspect-ratio:1;border-radius:3px;cursor:pointer;transition:transform .1s;min-width:0}
+.month-cubes{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;align-items:end;height:32px} /* Вирівнюємо по низу і задаємо фіксовану висоту рядка */
+.cube{border-radius:2px;cursor:pointer;transition:transform .1s;min-width:0} /* Прибрали aspect-ratio, щоб висота могла змінюватися */
 .cube:active{transform:scale(.85)}
 .cube-legend{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;justify-content:center}
 .cube-legend-item{font-size:9px;color:var(--sub);display:flex;align-items:center;gap:3px}
@@ -1076,6 +1076,14 @@ function makeCubeHeatmap(title,sheetData,color){
       const val=+r[i+2]||0;
       const cube=document.createElement('div');
       cube.className='cube';
+      
+      // ДИНАМІЧНИЙ РОЗРАХУНОК ВИСОТИ
+      // Якщо значення 0 — висота 3px (мінімальна лінія), якщо більше нуля — масштабуємо від 4px до 32px (макс. висота)
+      const minH = 3;
+      const maxH = 32;
+      const calculatedHeight = val > 0 ? Math.max(4, Math.round((val / maxV) * maxH)) : minH;
+      cube.style.height = calculatedHeight + 'px';
+
       if(val>0){
         const alpha=Math.max(0.12,Math.min(0.92,val/maxV));
         cube.style.background=color+Math.round(alpha*255).toString(16).padStart(2,'0');
