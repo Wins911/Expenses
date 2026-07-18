@@ -1092,7 +1092,40 @@ function makeCubeHeatmap(title,sheetData,color){
     catDiv.appendChild(cubesDiv);
     wrap.appendChild(catDiv);
   });
+  
+// Лінія тренду (сума по місяцях) під heatmap
+  const trendCanvas=document.createElement('canvas');
+  trendCanvas.style.cssText='width:100%;height:120px;margin-top:12px';
+  wrap.appendChild(trendCanvas);
 
+  const monthTotals=headers.map((_,i)=>rows.reduce((s,r)=>s+(+r[i+2]||0),0));
+
+  setTimeout(()=>{
+    new Chart(trendCanvas,{
+      type:'line',
+      data:{
+        labels:headers.map(m=>m.substring(0,3)),
+        datasets:[{
+          data:monthTotals,
+          borderColor:color,
+          backgroundColor:color+'33',  // ← напівпрозора заливка під лінією (33 = ~20% прозорості в hex)
+          tension:0.4,        // ← це і робить лінію плавною (0 = гострі кути, 0.4 = плавна крива)
+          borderWidth:2,
+          pointRadius:3,
+          pointBackgroundColor:color
+        }]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        scales:{
+          x:{ticks:{color:'#7b83a0',font:{size:9}},grid:{display:false}},
+          y:{ticks:{color:'#7b83a0',font:{size:9}},grid:{color:'#2e3650'}}
+        },
+        plugins:{legend:{display:false}}
+      }
+    });
+  },50);
+  
   return cardWrap(title,wrap,true);
 }
 
