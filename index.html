@@ -1044,6 +1044,7 @@ function makeCubeHeatmap(title,sheetData,color){
   const headers=(sheetData?.headers||[]).slice(2).filter(Boolean); // 12 month names
   const rows=sheetData?.rows||[];
   const wrap=document.createElement('div');
+  const pendingCubeCharts=[]; // усі міні-графіки цієї heatmap створимо після циклу
   wrap.style.cssText='width:100%';
 
   if(!rows.length||!headers.length){
@@ -1101,34 +1102,43 @@ chartWrap.appendChild(canvas);
 catDiv.appendChild(chartWrap);
 
 const monthVals=headers.map((m,i)=>+r[i+2]||0);
-setTimeout(()=>{
-  destroyChart(chartId);
-  charts[chartId]=new Chart(canvas,{
-    type:'line',
-    data:{
-      labels:headers,
-      datasets:[{
-        data:monthVals,
-        borderColor:color,
-        backgroundColor:color+'33',
-        fill:true,
-        tension:0.4,
-        pointRadius:0,
-        borderWidth:1.5
-      }]
-    },
-    options:{
-      responsive:true,maintainAspectRatio:false,
-      scales:{x:{display:false},y:{display:false}},
-      plugins:{legend:{display:false},tooltip:{enabled:false}},
-      elements:{point:{hoverRadius:0}}
-    }
-  });
-},50);
+    pendingCubeCharts.push({chartId,canvas,monthVals}); // збираємо, не створюємо одразу
 
-wrap.appendChild(catDiv);
+    wrap.appendChild(catDiv);
   });
   
+  // Створюємо всі графіки одним проходом ПІСЛЯ того, як весь DOM вже вставлено —
+  // це усуває баг, коли Chart.js неправильно рахує розмір для всіх canvas,
+  // окрім останнього (проблема ResizeObserver при масовому створенні одночасно)
+  requestAnimationFrame(()=>{
+    pendingCubeCharts.forEach(({chartId,canvas,monthVals},idx)=>{
+      setTimeout(()=>{
+        destroyChart(chartId);
+        charts[chartId]=new Chart(canvas,{
+          type:'line',
+          data:{
+            labels:headers,
+            datasets:[{
+              data:monthVals,
+              borderColor:color,
+              backgroundColor:color+'33',
+              fill:true,
+              tension:0.4,
+              pointRadius:0,
+              borderWidth:1.5
+            }]
+          },
+          options:{
+            responsive:true,maintainAspectRatio:false,
+            scales:{x:{display:false},y:{display:false}},
+            plugins:{legend:{display:false},tooltip:{enabled:false}},
+            elements:{point:{hoverRadius:0}}
+          }
+        });
+      },idx*15); // невеликий зсув між кожним графіком — уникає колізії ResizeObserver
+    });
+  });
+
   return cardWrap(title,wrap,true);
 }
 
