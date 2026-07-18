@@ -1041,107 +1041,65 @@ function makeGroupedBar(id,title,sheetData){
 
 // ── CUBE HEATMAP (new annual design) ──
 function makeCubeHeatmap(title,sheetData,color){
-  const headers=(sheetData?.headers||[]).slice(2).filter(Boolean); // 12 month names
-  const rows=sheetData?.rows||[];
+  const headers=(sheetData?.headers||[]).slice(2).filter(Boolean); // місяці
+  const rows=(sheetData?.rows||[]).filter(r=>r[0]);
   const wrap=document.createElement('div');
-  const pendingCubeCharts=[]; // усі міні-графіки цієї heatmap створимо після циклу
-  wrap.style.cssText='width:100%';
+  wrap.style.cssText='display:flex;flex-direction:column;gap:16px';
 
   if(!rows.length||!headers.length){
     wrap.innerHTML='<div style="text-align:center;color:var(--sub);padding:32px 0">Немає даних</div>';
-    return cardWrap(title,wrap,true);
+    return cardWrap(title,wrap);
   }
 
-  const allV=rows.flatMap(r=>r.slice(2,2+headers.length).map(v=>+v||0)).filter(v=>v>0);
-  const maxV=allV.length?Math.max(...allV):1;
+  rows.forEach((r,idx)=>{
+    const catName=r[0];
+    const values=r.slice(2,2+headers.length).map(v=>+v||0);
 
-  // Month abbreviations legend
-  const legendHtml=`<div style="display:grid;grid-template-columns:repeat(12,1fr);gap:3px;margin-bottom:10px;text-align:center">
-    ${headers.map(m=>`<div style="font-size:9px;color:var(--sub)">${m.substring(0,1)}</div>`).join('')}
-  </div>`;
-  wrap.innerHTML=legendHtml;
+    const block=document.createElement('div');
+    block.innerHTML=`<div style="font-size:13px;font-weight:700;color:var(--txt);margin-bottom:6px">${x(catName)}</div>`;
 
-  rows.filter(r=>r[0]).forEach(r=>{
-    const catDiv=document.createElement('div');
-    catDiv.className='cube-category';
+    const canvasWrap=document.createElement('div');
+    canvasWrap.style.cssText='position:relative;height:90px';
+    const canvas=document.createElement('canvas');
+    canvas.id=`cube_${idx}_${Math.random().toString(36).slice(2,7)}`;
+    canvasWrap.appendChild(canvas);
+    block.appendChild(canvasWrap);
+    wrap.appendChild(block);
 
-    const nameDiv=document.createElement('div');
-    nameDiv.className='cube-cat-name';
-    nameDiv.textContent=r[0];
-    catDiv.appendChild(nameDiv);
-
-    const cubesDiv=document.createElement('div');
-    cubesDiv.className='month-cubes';
-
-    headers.forEach((month,i)=>{
-      const val=+r[i+2]||0;
-      const cube=document.createElement('div');
-      cube.className='cube';
-      if(val>0){
-        const alpha=Math.max(0.12,Math.min(0.92,val/maxV));
-        cube.style.background=color+Math.round(alpha*255).toString(16).padStart(2,'0');
-      }else{
-        cube.style.background='var(--border)';
-        cube.style.opacity='0.25';
-      }
-      cube.dataset.month=month;
-      cube.dataset.val=val.toFixed(2);
-      cube.addEventListener('click',e=>showCubeTip(e,month,val));
-      cubesDiv.appendChild(cube);
-    });
-
-    catDiv.appendChild(cubesDiv);
-
-// ── Плавна area-діаграма тренду під кубиками цієї категорії ──
-const chartId='cube_'+title.replace(/\s+/g,'')+'_'+r[0].replace(/\W+/g,'');
-const chartWrap=document.createElement('div');
-chartWrap.style.cssText='height:48px;margin:2px 0 12px';
-const canvas=document.createElement('canvas');
-canvas.id=chartId;
-chartWrap.appendChild(canvas);
-catDiv.appendChild(chartWrap);
-
-const monthVals=headers.map((m,i)=>+r[i+2]||0);
-    pendingCubeCharts.push({chartId,canvas,monthVals}); // збираємо, не створюємо одразу
-
-    wrap.appendChild(catDiv);
-  });
-  
-  // Створюємо всі графіки одним проходом ПІСЛЯ того, як весь DOM вже вставлено —
-  // це усуває баг, коли Chart.js неправильно рахує розмір для всіх canvas,
-  // окрім останнього (проблема ResizeObserver при масовому створенні одночасно)
-  requestAnimationFrame(()=>{
-    pendingCubeCharts.forEach(({chartId,canvas,monthVals},idx)=>{
-      setTimeout(()=>{
-        destroyChart(chartId);
-        charts[chartId]=new Chart(canvas,{
-          type:'line',
-          data:{
-            labels:headers,
-            datasets:[{
-              data:monthVals,
-              borderColor:color,
-              backgroundColor:color+'33',
-              fill:true,
-              tension:0.4,
-              pointRadius:0,
-              borderWidth:1.5
-            }]
+    setTimeout(()=>{
+      destroyChart(canvas.id);
+      charts[canvas.id]=new Chart(canvas,{
+        type:'line',
+        data:{
+          labels:headers.map(h=>h.substring(0,3)),
+          datasets:[{
+            data:values,
+            borderColor:color,
+            backgroundColor:color+'33', // прозора заливка під лінією
+            fill:true,
+            tension:0.4,           // плавні криві
+            pointRadius:2,
+            pointBackgroundColor:color,
+            borderWidth:2
+          }]
+        },
+        options:{
+          responsive:true,maintainAspectRatio:false,
+          scales:{
+            x:{ticks:{color:'#7b83a0',font:{size:9}},grid:{display:false}},
+            y:{display:false,beginAtZero:true}
           },
-          options:{
-            responsive:true,maintainAspectRatio:false,
-            scales:{x:{display:false},y:{display:false}},
-            plugins:{legend:{display:false},tooltip:{enabled:false}},
-            elements:{point:{hoverRadius:0}}
+          plugins:{
+            legend:{display:false},
+            tooltip:{callbacks:{label:ctx=>` $${(+ctx.parsed.y).toFixed(2)}`}}
           }
-        });
-      },idx*15); // невеликий зсув між кожним графіком — уникає колізії ResizeObserver
-    });
+        }
+      });
+    },30);
   });
 
-  return cardWrap(title,wrap,true);
+  return cardWrap(title,wrap);
 }
-
 function showCubeTip(event,month,val){
   const tt=document.getElementById('cubeTip');
   tt.textContent=`${month}: $${(+val).toFixed(2)}`;
