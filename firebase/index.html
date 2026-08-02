@@ -179,6 +179,8 @@ select{padding-right:36px}
   <div class="login-sub">Увійдіть через Google щоб продовжити</div>
   <div class="login-card">
     <div id="googleBtn"></div>
+      <button onclick="firebaseLogin()" style="margin-top:12px;padding:14px 24px;border-radius:12px;border:none;background:#4d8ef0;color:#fff;font-weight:700;cursor:pointer">Увійти через Firebase (тест)</button>
+      <div id="fbTestResult" style="margin-top:16px;font-size:13px;color:var(--sub);text-align:center"></div>
     <div style="font-size:13px;color:var(--exp);display:none" id="loginErr">Доступ заборонено</div>
   </div>
 </div>
@@ -351,6 +353,49 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const fbAuth = firebase.auth();
 const fbDb   = firebase.firestore();
+
+// ── Крок 2: реальний вхід через Firebase Auth + тест запису/читання ──
+function firebaseLogin(){
+  const provider = new firebase.auth.GoogleAuthProvider();
+  fbAuth.signInWithPopup(provider)
+    .then(result => {
+      const email = result.user.email;
+      document.getElementById('fbTestResult').textContent = `Увійшли як: ${email}. Перевіряю запис...`;
+      return testFirestoreWrite(email);
+    })
+    .catch(err => {
+      document.getElementById('fbTestResult').textContent = 'Помилка входу: ' + err.message;
+    });
+}
+
+async function testFirestoreWrite(email){
+  const resEl = document.getElementById('fbTestResult');
+  try{
+    // Пробний запис у справжню колекцію expenses
+    const docRef = await fbDb.collection('expenses').add({
+      category: '_test_',
+      amount: 1,
+      desc: 'Перевірка з\'єднання Firebase',
+      currency: 'USD',
+      date: new Date().toISOString().split('T')[0],
+      author: email,
+      status: 'ACTIVE',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    resEl.textContent = `✓ Запис успішний! Doc ID: ${docRef.id}. Перевіряю читання...`;
+
+    // Пробне читання назад
+    const snap = await fbDb.collection('expenses').doc(docRef.id).get();
+    resEl.textContent += ` ✓ Читання успішне: ${JSON.stringify(snap.data())}`;
+
+    // Видаляємо тестовий документ, щоб не смітити базу
+    await docRef.delete();
+    resEl.textContent += ' ✓ Тестовий запис видалено.';
+  }catch(err){
+    resEl.textContent = '✗ Помилка: ' + err.code + ' — ' + err.message;
+  }
+}
 
 // Тимчасова перевірка з'єднання — просто пише в консоль браузера,
 // нічого не показує користувачу і нічого не змінює в роботі додатку
