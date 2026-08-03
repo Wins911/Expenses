@@ -367,42 +367,6 @@ function firebaseLogin(){
     });
 }
 
-async function testFirestoreWrite(email){
-  const resEl = document.getElementById('fbTestResult');
-  try{
-    // Пробний запис у справжню колекцію expenses
-    const docRef = await fbDb.collection('expenses').add({
-      category: '_test_',
-      amount: 1,
-      desc: 'Перевірка з\'єднання Firebase',
-      currency: 'USD',
-      date: new Date().toISOString().split('T')[0],
-      author: email,
-      status: 'ACTIVE',
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    resEl.textContent = `✓ Запис успішний! Doc ID: ${docRef.id}. Перевіряю читання...`;
-
-    // Пробне читання назад
-    const snap = await fbDb.collection('expenses').doc(docRef.id).get();
-    resEl.textContent += ` ✓ Читання успішне: ${JSON.stringify(snap.data())}`;
-
-    // Видаляємо тестовий документ, щоб не смітити базу
-    await docRef.delete();
-    resEl.textContent += ' ✓ Тестовий запис видалено.';
-  }catch(err){
-    resEl.textContent = '✗ Помилка: ' + err.code + ' — ' + err.message;
-  }
-}
-
-// Тимчасова перевірка з'єднання — просто пише в консоль браузера,
-// нічого не показує користувачу і нічого не змінює в роботі додатку
-console.log('Firebase App:', firebase.apps.length ? '✓ ініціалізовано' : '✗ помилка');
-fbDb.collection('_connectivity_test').limit(1).get()
-  .then(()=>console.log('Firestore: ✓ з\'єднання є (правила поки блокують читання — це нормально)'))
-  .catch(e=>console.log('Firestore: відповідь отримано —', e.code, '(очікувано, поки немає доступу)'));
-
 // Префікси UUID — має збігатися з ALLOWED_USERS в Code.gs
 let myPrefix = 'XX'; // прийде з сервера після входу
 const FILTER_SHEETS = {monthly:'Monthly Overview',annual:'Annual Overview',analyz:'Аналіз'};
