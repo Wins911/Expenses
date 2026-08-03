@@ -338,7 +338,7 @@ select{padding-right:36px}
 <div class="toast" id="toast"></div>
 
 <script>
-const SCRIPT_URL   = 'https://script.google.com/macros/s/AKfycbwyfhxEb9lc0NCb4zc3vaNIyLfI_6M1lSj5JDKPp-wajrg2zclq5_37jn5UC01UsnzvLg/exec';
+const SCRIPT_URL   = 'https://script.google.com/macros/s/AKfycbx-qvOas_z7yIFoRk522zFBw5N48SVSbgC1BtWiMeP7MXfc3fqvSc_a565ipwPwnxqEXQ/exec';
 const GOOGLE_CLIENT_ID = '647272988527-nuhp8d8iut2t4u7384e41cm1bejn8m38.apps.googleusercontent.com';
 
 // ── Firebase (крок 1 — лише підключення й перевірка, дані поки в Sheets) ──
@@ -590,10 +590,36 @@ async function saveRecord(){
   if(!cat){showToast('Виберіть категорію','err');return;}
   if(!amt||+amt===0){showToast('Введіть суму','err');return;}
   if(!cur){showToast('Вкажіть валюту','err');return;}
-  const uuid=genUUID(userEmail);
-  const payload={action:'addRecord',sheet:TAB_CFG[addTab].sheet,uuid,date,category:cat,amount:amt,desc,currency:cur,offline:!navigator.onLine};
+
   const btn=document.getElementById('saveBtn');
   btn.disabled=true;btn.innerHTML='<span class="spin"></span>Збереження…';
+
+  // ── НОВИЙ ШЛЯХ: тільки для Витрат, через Firestore ──
+  if(addTab==='exp'){
+    try{
+      const rateResp = await api({action:'getRateSync', currency:cur, to:'USD', date});
+      const rateUSD = rateResp.rate || 1;
+      const amountUSD = +amt * rateUSD;
+
+      await fbDb.collection('expenses').add({
+        category: cat, amount: +amt, desc, currency: cur,
+        rateUSD, amountUSD,
+        date, author: userEmail, status: 'ACTIVE',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+
+      showToast('✓ Збережено (Firestore)','ok'); afterSave(btn);
+    }catch(e){
+      showToast('Помилка Firestore: '+e.message,'err');
+      btn.disabled=false;btn.textContent=TAB_CFG[addTab].label;
+    }
+    return;
+  }
+
+  // ── СТАРИЙ ШЛЯХ: Доходи/Бізнес поки лишаються на Sheets ──
+  const uuid=genUUID(userEmail);
+  const payload={action:'addRecord',sheet:TAB_CFG[addTab].sheet,uuid,date,category:cat,amount:amt,desc,currency:cur,offline:!navigator.onLine};
   if(!navigator.onLine){offlineQueue.push(payload);saveQueue();showToast('⚡ Збережено офлайн','info');afterSave(btn);return;}
   try{
     const r=await api(payload);
@@ -603,6 +629,7 @@ async function saveRecord(){
     }else{showToast('Помилка: '+r.message,'err');btn.disabled=false;btn.textContent=TAB_CFG[addTab].label;}
   }catch(e){offlineQueue.push(payload);saveQueue();showToast('⚡ Збережено офлайн','info');afterSave(btn);}
 }
+
 function afterSave(btn){
   document.getElementById('fAmt').value='';document.getElementById('fDesc').value='';
   btn.disabled=false;btn.textContent=TAB_CFG[addTab].label;
