@@ -354,17 +354,16 @@ firebase.initializeApp(firebaseConfig);
 const fbAuth = firebase.auth();
 const fbDb   = firebase.firestore();
 
-// ── Крок 2: реальний вхід через Firebase Auth + тест запису/читання ──
+// ── Крок 2: реальний вхід через Firebase Auth ──
 function firebaseLogin(){
   const provider = new firebase.auth.GoogleAuthProvider();
   fbAuth.signInWithPopup(provider)
     .then(result => {
-      const email = result.user.email;
-      document.getElementById('fbTestResult').textContent = `Увійшли як: ${email}. Перевіряю запис...`;
-      return testFirestoreWrite(email);
+      userEmail = result.user.email;
+      startApp(); // переходить у появу вкладок Додати/Записи/Аналітика
     })
     .catch(err => {
-      document.getElementById('fbTestResult').textContent = 'Помилка входу: ' + err.message;
+      showToast('Помилка входу: ' + err.message, 'err');
     });
 }
 
