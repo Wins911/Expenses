@@ -356,16 +356,20 @@ const fbDb   = firebase.firestore();
 
 // ── Крок 2: реальний вхід через Firebase Auth ──
 function firebaseLogin(){
-  const provider = new firebase.auth.GoogleAuthProvider();
-  fbAuth.signInWithPopup(provider)
-    .then(result => {
-      userEmail = result.user.email;
-      startApp(); // переходить у появу вкладок Додати/Записи/Аналітика
-    })
-    .catch(err => {
-      showToast('Помилка входу: ' + err.message, 'err');
-    });
-}
+    const provider = new firebase.auth.GoogleAuthProvider();
+      fbAuth.signInWithPopup(provider)
+          .then(async result => {
+                userEmail = result.user.email;
+                      // Отримуємо Firebase ID-токен — він теж JWT з email/exp,
+                            // сумісний з вашим verifyToken() у Code.gs
+                                  accessToken = await result.user.getIdToken();
+                                        startApp();
+                                            })
+                                                .catch(err => {
+                                                      showToast('Помилка входу: ' + err.message, 'err');
+                                                          });
+                                                          }
+
 
 // Префікси UUID — має збігатися з ALLOWED_USERS в Code.gs
 let myPrefix = 'XX'; // прийде з сервера після входу
