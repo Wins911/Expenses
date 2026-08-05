@@ -1068,7 +1068,7 @@ function fillCanvas(id){
 function renderCharts(t,data){
   Object.keys(charts).forEach(id=>destroyChart(id));
   if(t==='monthly'){
-    put('slide0',()=>makeStackedHBar('cME','Витрати по категоріях',data.expenses.stack));
+    put('slide0',()=>makeHBar1('cME','Витрати по категоріях',data.expenses,'exp'));
     put('slide1',()=>{
   const container=document.createElement('div');
   container.style.cssText='display:flex;flex-direction:column;gap:12px;flex:1;min-height:0';
