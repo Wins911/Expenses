@@ -1123,7 +1123,17 @@ function computeAnalyzData(startMonthName,startYear,category){
   const expThis=sumByCategory('exp',thisMonths),expPrev=sumByCategory('exp',prevMonths);
   const incThis=sumByCategory('inc',thisMonths),incPrev=sumByCategory('inc',prevMonths);
   const subThis=sumByDesc('exp',thisMonths,category),subPrev=sumByDesc('exp',prevMonths,category);
-  const subcatSummary=groupSum(allRecords.filter(r=>r._t==='exp'&&inSet(r,thisMonths)&&r.category===category&&r.subcategory),'subcategory');
+  function sumSubcatByYear(monthsSet){
+  const map={};
+  allRecords.forEach(r=>{
+    if(r._t!=='exp'||r.category!==category||!r.subcategory||!inSet(r,monthsSet))return;
+    map[r.subcategory]=(map[r.subcategory]||0)+usdOf(r);
+  });
+  return map;
+}
+const subcatThis=sumSubcatByYear(thisMonths);
+const subcatPrev=sumSubcatByYear(prevMonths);
+const subcatSummary=combine(subcatThis,subcatPrev); // [[назва,'',цейРік,минРік], ...]
   return{
     expenses:{rows:combine(expThis,expPrev)},
     income:  {rows:combine(incThis,incPrev)},
@@ -1186,10 +1196,19 @@ function renderCharts(t,data){
     listCard.style.flex='0 0 auto';
     listCard.innerHTML=`<div class="chart-title">Суми по підкатегоріях</div>
       <div style="display:flex;flex-direction:column;gap:5px;font-size:13px">
-        ${summary.map(([n,v])=>`<div style="display:flex;justify-content:space-between">
-          <span style="color:var(--txt)">${x(n)}</span>
-          <span style="color:var(--sub);font-weight:600">$${v.toFixed(2)}</span>
-        </div>`).join('')}
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+  <tr style="border-bottom:1px solid var(--border)">
+    <th style="text-align:left;padding:4px 0;color:var(--sub);font-weight:600">Підкатегорія</th>
+    <th style="text-align:right;padding:4px 0;color:var(--sub);font-weight:600">Цей рік</th>
+    <th style="text-align:right;padding:4px 0;color:var(--sub);font-weight:600">Мин. рік</th>
+  </tr>
+  ${summary.map(([n,,curVal,prevVal])=>`
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:5px 0;color:var(--txt)">${x(n)}</td>
+      <td style="text-align:right;padding:5px 0;color:var(--txt)">$${(+curVal).toFixed(2)}</td>
+      <td style="text-align:right;padding:5px 0;color:var(--sub)">$${(+prevVal).toFixed(2)}</td>
+    </tr>`).join('')}
+</table>
       </div>`;
     container.appendChild(listCard);
   }
