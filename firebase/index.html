@@ -596,15 +596,17 @@ async function saveRecord(){
   btn.disabled=true;btn.innerHTML='<span class="spin"></span>Збереження…';
 
   // ── НОВИЙ ШЛЯХ: тільки для Витрат, через Firestore ──
-  if(addTab==='exp'){
+  if(addTab==='exp'||addTab==='inc'){
     try{
       const rateResp = await api({action:'getRateSync', currency:cur, to:'USD', date});
       const rateUSD = rateResp.rate || 1;
       const amountUSD = +amt * rateUSD;
       const subcat = document.getElementById('fSubcat').value.trim();
 
-      await fbDb.collection('expenses').add({
-        category: cat, amount: +amt, desc, currency: cur, subcategory: subcat,
+      const targetCollection = addTab==='exp' ? 'expenses' : 'income';
+      await fbDb.collection(targetCollection).add({
+        category: cat, amount: +amt, desc, currency: cur,
+        subcategory: addTab==='exp' ? subcat : '',
         rateUSD, amountUSD,
         date, author: userEmail, status: 'ACTIVE',
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
