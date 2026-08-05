@@ -1115,7 +1115,7 @@ function renderCharts(t,data){
       </div>`;
     container.appendChild(listCard);
   }
-  const chartCard=makeHBarCompare('cAS','По описах вибраної категорії',data.subcat,'sub');
+  const chartCard=makeHBar2('cAS','По описах вибраної категорії',data.subcat,'sub');
   chartCard.style.flex='1';
   container.appendChild(chartCard);
   return container;
