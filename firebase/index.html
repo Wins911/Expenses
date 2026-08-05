@@ -1049,7 +1049,7 @@ function computeAnalyzData(startMonthName,startYear,category){
   return{
     expenses:{rows:combine(expThis,expPrev)},
     income:  {rows:combine(incThis,incPrev)},
-    subcat:  {rows:combine(subThis,subPrev)}
+    subcat:  {rows:combine(subThis,subPrev), subcatSummary:groupSum(allRecords.filter(r=>r._t==='exp'&&inSet(r,thisMonths)&&r.category===category&&r.subcategory),'subcategory')}
   };
 }
 
@@ -1098,7 +1098,28 @@ function renderCharts(t,data){
     put('slide2',()=>makeCubeHeatmap('Доходи по категоріях',data.income,'#34c77b'),false);
   }else{
     put('slide0',()=>makeHBar2('cAE','Витрати по категоріях',data.expenses,'exp'));
-    put('slide1',()=>makeHBar2('cAS','По описах вибраної категорії',data.subcat,'sub'));
+    put('slide1',()=>{
+  const container=document.createElement('div');
+  container.style.cssText='display:flex;flex-direction:column;gap:12px;flex:1;min-height:0';
+  const summary=data.subcat.subcatSummary||[];
+  if(summary.length){
+    const listCard=document.createElement('div');
+    listCard.className='chart-card';
+    listCard.style.flex='0 0 auto';
+    listCard.innerHTML=`<div class="chart-title">Суми по підкатегоріях</div>
+      <div style="display:flex;flex-direction:column;gap:5px;font-size:13px">
+        ${summary.map(([n,v])=>`<div style="display:flex;justify-content:space-between">
+          <span style="color:var(--txt)">${x(n)}</span>
+          <span style="color:var(--sub);font-weight:600">$${v.toFixed(2)}</span>
+        </div>`).join('')}
+      </div>`;
+    container.appendChild(listCard);
+  }
+  const chartCard=makeHBarCompare('cAS','По описах вибраної категорії',data.subcat,'sub');
+  chartCard.style.flex='1';
+  container.appendChild(chartCard);
+  return container;
+});
     put('slide2',()=>makeHBar2('cAI','Доходи по категоріях',data.income,'inc'));
   }
 }
