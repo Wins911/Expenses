@@ -1,0 +1,555 @@
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  Сімейний бюджет — Google Apps Script v3.0 (Final)         ║
+// ║  Файл: «Наш семейный бюджет – 2026»                        ║
+// ╚══════════════════════════════════════════════════════════════╝
+
+// ── Замініть на реальні email ──
+var ALLOWED_USERS = [
+  'xxxx@gmail.com',
+  'yyyy@gmail.com'
+];
+var USER_PREFIX = {
+  'xxxx@gmail.com':  'xx',
+  'yyyy@gmail.com': 'yy'
+};
+
+// ── Листи ──
+var SH = {
+  expenses: 'Витрати',
+  income:   'Доходи',
+  business: 'Бізнес',
+  settings: 'Settings',
+  monthly:  'Monthly Overview',
+  annual:   'Annual Overview',
+  analyz:   'Аналіз',
+  dMonthInc:  'Diagram Monthly Income',
+  dMonthExp:  'Diagram Monthly Expenses',
+  dMonthSub:  'Diagram Monthly Expenses Subcategory',
+  dAnnBal:    'Diagram Annual Balance',
+  dAnnInc:    'Diagram Annual Income',
+  dAnnExp:    'Diagram Annual Expenses',
+  dAnlInc:    'Diagram Analys Income',
+  dAnlExp:    'Diagram Analys Expenses',
+  dAnlSub:    'Diagram Analys Expenses Subcategory'
+};
+
+// ── Структура колонок ──
+// Витрати/Доходи: A=UUID B=Created C=Updated D=Status E=Дата F=Категорія G=Сума H=Опис I=Валюта J=Курс K=USD(formula)
+// Бізнес:         A=UUID B=Created C=Updated D=Status E=Дата F=Категорія G=Сума H=Опис I=Валюта J=Курс→USD K=USD(formula) L=Курс2→UAH M=UAH(formula)
+
+// ── Клітинки фільтрів аналітики ──
+var FC = {
+  monthly: { month: 'K4', year: 'K6', category: 'K8' },
+  annual:  { month: 'B16', year: 'B20' },
+  analyz:  { month: 'C5', year: 'F5', category: 'B47' }
+};
+
+// ══════════════════════════════════════════
+// ROUTING
+// ══════════════════════════════════════════
+function doPost(e) {
+  try {
+    var data  = JSON.parse(e.postData.contents);
+    var email = verifyToken(data._token || '');
+    if (!email)          return respond({ status: 'error', message: 'Невалідний токен' });
+    if (!isAllowed(email)) return respond({ status: 'error', message: 'Доступ заборонено: ' + email });
+
+    var res;
+    switch (data.action) {
+      case 'addRecord':         res = addRecord(data, email);     break;
+      case 'resolveRate':       res = resolveRate(data);           break;
+      case 'resolveOfflineRate':res = resolveOfflineRate(data);    break;
+      case 'getRecords':        res = getRecords(data);            break;
+      case 'updateRecord':      res = updateRecord(data);          break;
+      case 'deleteRecord':      res = deleteRecord(data);          break;
+      case 'getSettings':       res = getSettings();               break;
+      case 'whoAmI':            res = { status: 'ok', prefix: getPrefix(email) }; break;
+      case 'getFilters':        res = getFilters();                break;
+      case 'applyFilter':       res = applyFilter(data);           break;
+      case 'getRateSync':       res = getRateSync(data);           break;
+      default: res = { status: 'error', message: 'Unknown action: ' + data.action };
+    }
+    return respond(res);
+  } catch(err) {
+    return respond({ status: 'error', message: err.toString() });
+  }
+}
+
+function doGet(e) {
+  try {
+    if (e.parameter.action === 'getSettings') return respond(getSettings());
+    return respond({ status: 'error', message: 'Unknown GET action' });
+  } catch(err) {
+    return respond({ status: 'error', message: err.toString() });
+  }
+}
+
+function isAllowed(email) {
+  var e = (email || '').toLowerCase();
+  return ALLOWED_USERS.some(function(u){ return u.toLowerCase() === e; });
+}
+
+function getPrefix(email) {
+  var e = (email || '').toLowerCase();
+  for (var k in USER_PREFIX) {
+    if (k.toLowerCase() === e) return USER_PREFIX[k];
+  }
+  return 'XX';
+}
+
+function respond(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ══════════════════════════════════════════
+// 1. ДОДАТИ ЗАПИС
+// ══════════════════════════════════════════
+function addRecord(data, email) {
+  var ss       = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetKey = data.sheet;
+  var sheet    = ss.getSheetByName(SH[sheetKey]);
+  if (!sheet) return { status: 'error', message: 'Лист не знайдено: ' + SH[sheetKey] };
+
+  var now      = new Date();
+  var uuid     = data.uuid || (getPrefix(email) + '_' + Utilities.getUuid());
+  var currency = (data.currency || 'USD').toUpperCase();
+  var amount   = parseFloat(data.amount) || 0;
+  var dateISO  = (data.date || '').substring(0, 10);
+  var row      = getNextRow(sheet);
+
+  sheet.getRange(row, 1).setValue(uuid);            // A: UUID
+  sheet.getRange(row, 2).setValue(now);             // B: Created
+  sheet.getRange(row, 3).setValue(now);             // C: Updated
+  sheet.getRange(row, 4).setValue('ACTIVE');        // D: Status
+  sheet.getRange(row, 5).setValue(formatDate(dateISO)); // E: Дата
+  sheet.getRange(row, 6).setValue(data.category || ''); // F: Категорія
+  sheet.getRange(row, 7).setValue(amount);          // G: Сума
+  sheet.getRange(row, 8).setValue(data.desc || ''); // H: Опис
+  sheet.getRange(row, 9).setValue(currency);        // I: Валюта
+
+  // J: Курс→USD
+  if (currency === 'USD') {
+    sheet.getRange(row, 10).setValue(1);
+  } else if (data.offline) {
+    sheet.getRange(row, 10).setValue(''); // заповниться при синхронізації
+  } else {
+    sheet.getRange(row, 10).setFormula(gfFormula(currency, 'USD', dateISO));
+  }
+  // K: USD = formula (не чіпаємо)
+
+  if (sheetKey === 'business') {
+    // L: Курс2→UAH
+    if (currency === 'UAH') {
+      sheet.getRange(row, 12).setValue(1);
+    } else if (data.offline) {
+      sheet.getRange(row, 12).setValue('');
+    } else {
+      sheet.getRange(row, 12).setFormula(gfFormula(currency, 'UAH', dateISO));
+    }
+    // M: UAH = formula (не чіпаємо)
+  }
+
+  return { status: 'ok', row: row, uuid: uuid };
+}
+
+// ══════════════════════════════════════════
+// 2. ЗАФІКСУВАТИ КУРС (фоновий виклик через 4 сек)
+// ══════════════════════════════════════════
+function resolveRate(data) {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SH[data.sheet]);
+  if (!sheet) return { status: 'error', message: 'Лист не знайдено' };
+
+  var row = parseInt(data.row);
+  SpreadsheetApp.flush();
+  Utilities.sleep(1000);
+
+  var cellJ = sheet.getRange(row, 10);
+  var valJ  = cellJ.getValue();
+  if (typeof valJ === 'number' && valJ > 0) cellJ.setValue(valJ);
+
+  if (data.sheet === 'business') {
+    var cellL = sheet.getRange(row, 12);
+    var valL  = cellL.getValue();
+    if (typeof valL === 'number' && valL > 0) cellL.setValue(valL);
+  }
+
+  return { status: 'ok' };
+}
+
+// ══════════════════════════════════════════
+// 2b. ЗАПОВНИТИ КУРС ДЛЯ ОФЛАЙН-ЗАПИСУ
+// ══════════════════════════════════════════
+function resolveOfflineRate(data) {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SH[data.sheet]);
+  if (!sheet) return { status: 'error', message: 'Лист не знайдено' };
+
+  var row      = parseInt(data.row);
+  var currency = (data.currency || 'USD').toUpperCase();
+  var dateISO  = (data.date || '').substring(0, 10);
+
+  if (currency === 'USD') {
+    sheet.getRange(row, 10).setValue(1);
+  } else {
+    sheet.getRange(row, 10).setFormula(gfFormula(currency, 'USD', dateISO));
+  }
+
+  if (data.sheet === 'business') {
+    if (currency === 'UAH') {
+      sheet.getRange(row, 12).setValue(1);
+    } else {
+      sheet.getRange(row, 12).setFormula(gfFormula(currency, 'UAH', dateISO));
+    }
+  }
+
+  SpreadsheetApp.flush();
+  Utilities.sleep(1000);
+
+  var cellJ = sheet.getRange(row, 10);
+  var valJ  = cellJ.getValue();
+  if (typeof valJ === 'number' && valJ > 0) cellJ.setValue(valJ);
+
+  if (data.sheet === 'business') {
+    var cellL = sheet.getRange(row, 12);
+    var valL  = cellL.getValue();
+    if (typeof valL === 'number' && valL > 0) cellL.setValue(valL);
+  }
+
+  return { status: 'ok' };
+}
+
+// ══════════════════════════════════════════
+// 3. ОТРИМАТИ ЗАПИСИ
+// ══════════════════════════════════════════
+function getRecords(data) {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SH[data.sheet]);
+  if (!sheet) return { status: 'error', message: 'Лист не знайдено' };
+
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return { status: 'ok', records: [] };
+
+  var numCols = data.sheet === 'business' ? 13 : 11;
+  var values  = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
+  var records = [];
+
+  values.forEach(function(row, i) {
+    if (row[3] === 'DELETED') return;  // D
+    if (!row[4] && !row[6]) return;    // E, G
+
+    var d = row[4];
+    var dateStr = d instanceof Date
+      ? Utilities.formatDate(d, 'Europe/Kiev', 'dd.MM.yyyy')
+      : String(d || '');
+
+    var created = row[1];
+    var createdStr = created instanceof Date
+      ? Utilities.formatDate(created, 'Europe/Kiev', 'dd.MM.yyyy HH:mm')
+      : '';
+
+    records.push({
+      row:      i + 2,
+      uuid:     row[0] || '',
+      created:  createdStr,
+      date:     dateStr,
+      category: row[5] || '',
+      amount:   row[6] || 0,
+      desc:     row[7] || '',
+      currency: row[8] || '',
+      rateUSD:  row[9] || 0,
+      usd:      row[10] || 0,   // K: базова валюта (USD) — для коректних підсумків
+      rateUAH:  data.sheet === 'business' ? (row[11] || 0) : null,
+      uah:      data.sheet === 'business' ? (row[12] || 0) : null  // M
+    });
+  });
+
+  records.reverse();
+  return { status: 'ok', records: records.slice(0, parseInt(data.limit) || 100) };
+}
+
+// ══════════════════════════════════════════
+// 4. РЕДАГУВАТИ ЗАПИС
+// ══════════════════════════════════════════
+function updateRecord(data) {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SH[data.sheet]);
+  if (!sheet) return { status: 'error', message: 'Лист не знайдено' };
+
+  var row      = parseInt(data.row);
+  var currency = (data.currency || 'USD').toUpperCase();
+  var dateISO  = (data.date || '').substring(0, 10);
+
+  sheet.getRange(row, 3).setValue(new Date());             // C: Updated
+  sheet.getRange(row, 5).setValue(formatDate(dateISO));    // E: Дата
+  sheet.getRange(row, 6).setValue(data.category || '');    // F
+  sheet.getRange(row, 7).setValue(parseFloat(data.amount) || 0); // G
+  sheet.getRange(row, 8).setValue(data.desc || '');        // H
+  sheet.getRange(row, 9).setValue(currency);               // I
+
+  if (currency === 'USD') {
+    sheet.getRange(row, 10).setValue(1);
+  } else {
+    sheet.getRange(row, 10).setFormula(gfFormula(currency, 'USD', dateISO));
+  }
+
+  if (data.sheet === 'business') {
+    if (currency === 'UAH') {
+      sheet.getRange(row, 12).setValue(1);
+    } else {
+      sheet.getRange(row, 12).setFormula(gfFormula(currency, 'UAH', dateISO));
+    }
+  }
+
+  // Для редагування фіксуємо одразу (не критично затримати відповідь)
+  SpreadsheetApp.flush();
+  Utilities.sleep(800);
+
+  var vJ = sheet.getRange(row, 10).getValue();
+  if (typeof vJ === 'number' && vJ > 0) sheet.getRange(row, 10).setValue(vJ);
+
+  if (data.sheet === 'business') {
+    var vL = sheet.getRange(row, 12).getValue();
+    if (typeof vL === 'number' && vL > 0) sheet.getRange(row, 12).setValue(vL);
+  }
+
+  return { status: 'ok' };
+}
+
+// ══════════════════════════════════════════
+// 5. М'ЯКЕ ВИДАЛЕННЯ
+// ══════════════════════════════════════════
+function deleteRecord(data) {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SH[data.sheet]);
+  if (!sheet) return { status: 'error', message: 'Лист не знайдено' };
+  var row = parseInt(data.row);
+  sheet.getRange(row, 3).setValue(new Date()); // C: Updated
+  sheet.getRange(row, 4).setValue('DELETED');   // D: Status
+  return { status: 'ok' };
+}
+
+// ══════════════════════════════════════════
+// 6. НАЛАШТУВАННЯ
+// Settings: A=ВитрCats B=ДохCats C=БізCats D=Currencies E=MainCurrency
+//           F=ВитрCatsFreq G=ВитрDescs H=ДохCatsFreq I=ДохDescs
+//           J=БізCatsFreq K=БізDescs M=Months N=SchemaVersion
+// ══════════════════════════════════════════
+function getSettings() {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SH.settings);
+  if (!sheet) return { status: 'error', message: 'Settings не знайдено' };
+
+  var n = Math.max(sheet.getLastRow(), 13);
+
+  function col(c) {
+    return sheet.getRange(2, c, n - 1, 1).getValues()
+      .map(function(r){ return r[0]; }).filter(Boolean);
+  }
+
+  return {
+    status:             'ok',
+    expenseCategories:  col(6),   // F
+    expenseDescs:       col(7),   // G
+    incomeCategories:   col(8),   // H
+    incomeDescs:        col(9),   // I
+    businessCategories: col(10),  // J
+    businessDescs:      col(11),  // K
+    currencies:         col(4),   // D
+    mainCurrency:       sheet.getRange(2, 5).getValue() || 'USD',
+    months:             col(13),  // M
+    expenseSubcategories: col(15), // O
+    expenseCategoriesOrder: col(1), // A — фіксований порядок (для діаграм)
+    incomeCategoriesOrder:  col(2), // B — фіксований порядок (для діаграм)
+  };
+}
+
+// ══════════════════════════════════════════
+// 7. ОТРИМАТИ ПОТОЧНІ ФІЛЬТРИ
+// ══════════════════════════════════════════
+function getFilters() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  function v(shName, cell) {
+    var s = ss.getSheetByName(shName);
+    return s ? String(s.getRange(cell).getValue() || '') : '';
+  }
+
+  return {
+    status: 'ok',
+    monthly: {
+      month:    v(SH.monthly, FC.monthly.month),
+      year:     v(SH.monthly, FC.monthly.year),
+      category: v(SH.monthly, FC.monthly.category)
+    },
+    annual: {
+      month: v(SH.annual, FC.annual.month),
+      year:  v(SH.annual, FC.annual.year)
+    },
+    analyz: {
+      month:    v(SH.analyz, FC.analyz.month),
+      year:     v(SH.analyz, FC.analyz.year),
+      category: v(SH.analyz, FC.analyz.category)
+    }
+  };
+}
+
+// ══════════════════════════════════════════
+// 8. ЗАСТОСУВАТИ ФІЛЬТР + ПОВЕРНУТИ ДІАГРАМИ
+// (один виклик = запис фільтру + flush + читання даних)
+// ══════════════════════════════════════════
+function applyFilter(data) {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(data.sheetName);
+  if (!sheet) return { status: 'error', message: 'Лист не знайдено: ' + data.sheetName };
+
+  (data.cells || []).forEach(function(item) {
+    sheet.getRange(item.cell).setValue(item.value);
+  });
+
+  SpreadsheetApp.flush();
+  Utilities.sleep(800);
+
+  return getDiagrams({ tab: data.tab });
+}
+
+// ══════════════════════════════════════════
+// 9. ДАНІ ДІАГРАМ
+// ══════════════════════════════════════════
+function getDiagrams(data) {
+  var tab = data.tab;
+  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+
+  function read(name) {
+    var s = ss.getSheetByName(name);
+    if (!s) return { headers: [], rows: [] };
+    var lr = s.getLastRow();
+    var lc = s.getLastColumn();
+    if (lr < 1 || lc < 1) return { headers: [], rows: [] };
+    var vals = s.getRange(1, 1, lr, lc).getValues();
+    return {
+      headers: vals[0].map(function(h){ return h !== '' ? String(h) : ''; }),
+      rows:    vals.slice(1).filter(function(r){ return r[0] !== ''; })
+    };
+  }
+
+  if (tab === 'monthly') return {
+    status:   'ok',
+    income:   read(SH.dMonthInc),
+    expenses: read(SH.dMonthExp),
+    subcat:   read(SH.dMonthSub)
+  };
+
+  if (tab === 'annual') return {
+    status:   'ok',
+    balance:  read(SH.dAnnBal),
+    income:   read(SH.dAnnInc),
+    expenses: read(SH.dAnnExp)
+  };
+
+  if (tab === 'analyz') return {
+    status:   'ok',
+    income:   read(SH.dAnlInc),
+    expenses: read(SH.dAnlExp),
+    subcat:   read(SH.dAnlSub)
+  };
+
+  return { status: 'error', message: 'Unknown tab: ' + tab };
+}
+
+// ══════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════
+function getNextRow(sheet) {
+  var lock = LockService.getDocumentLock();
+  lock.waitLock(10000);
+  try {
+    return Math.max(sheet.getLastRow() + 1, 2);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function gfFormula(from, to, dateISO) {
+  // Отримуємо сьогоднішню дату у форматі YYYY-MM-DD (за місцевим часом)
+  var today = new Date();
+  var todayISO = today.getFullYear() + '-' +
+                 String(today.getMonth() + 1).padStart(2, '0') + '-' +
+                 String(today.getDate()).padStart(2, '0');
+
+  // 1. Якщо запитувана дата — це СЬОГОДНІ:
+  if (dateISO === todayISO) {
+    // Намагаємося взяти "живий" курс без дат.
+    // Якщо ринок закритий або помилка — беремо останню історію за 9 днів.
+    return '=IFERROR(GOOGLEFINANCE("CURRENCY:' + from + to + '"); ' +
+           'INDEX(SORT(GOOGLEFINANCE("CURRENCY:' + from + to + '";"close";DATEVALUE("' + dateISO + '")-9;"' + dateISO + '");1;FALSE);2;2))';
+  }
+
+  // 2. Якщо це будь-яка МИНУЛА дата:
+  // Шукаємо точний курс або останній доступний за 9 днів до цієї дати.
+  else {
+    return '=IFERROR(INDEX(SORT(GOOGLEFINANCE("CURRENCY:' + from + to + '";"close";DATEVALUE("' + dateISO + '")-9;"' + dateISO + '");1;FALSE);2;2);1)';
+  }
+}
+
+// ══════════════════════════════════════════
+// СИНХРОННИЙ КУРС — для Firebase (не пише в реальні листи)
+// ══════════════════════════════════════════
+function getRateSync(data) {
+  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('RateScratch');
+  if (!sheet) return { status: 'error', message: 'Лист RateScratch не знайдено' };
+
+  var currency = (data.currency || 'USD').toUpperCase();
+  var toCur    = data.to || 'USD';
+  var dateISO  = (data.date || '').substring(0, 10);
+  var cell     = sheet.getRange('A1');
+
+  if (currency === toCur) return { status: 'ok', rate: 1 };
+
+  cell.setFormula(gfFormula(currency, toCur, dateISO));
+  SpreadsheetApp.flush();
+  Utilities.sleep(1000);
+  var val = cell.getValue();
+  cell.clearContent();
+
+  return { status: 'ok', rate: (typeof val === 'number' && val > 0) ? val : 1 };
+}
+
+function formatDate(iso) {
+  if (!iso) return '';
+  var p = iso.split('-');
+  return p.length === 3 ? p[2] + '.' + p[1] + '.' + p[0] : iso;
+}
+
+function verifyToken(token) {
+  try {
+    if (!token) return null;
+    var parts  = token.split('.');
+    if (parts.length < 2) return null;
+    var padded = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (padded.length % 4) padded += '=';
+    var payload = JSON.parse(
+      Utilities.newBlob(Utilities.base64Decode(padded)).getDataAsString()
+    );
+    var now = Math.floor(Date.now() / 1000);
+    if (payload.exp && payload.exp < now) return null;
+    return payload.email || null;
+  } catch(e) {
+    Logger.log('Token error: ' + e);
+    return null;
+  }
+}
+
+// ── Тести ──
+function testAdd() {
+  Logger.log(JSON.stringify(addRecord({
+    sheet: 'expenses', uuid: 'SL_test-001',
+    date: '2026-07-12', category: 'Продукти та хозтовари',
+    amount: 99, desc: 'тест', currency: 'UAH', offline: false
+  }, 'test@gmail.com')));
+}
+function testSettings() { Logger.log(JSON.stringify(getSettings())); }
+function testFilters()  { Logger.log(JSON.stringify(getFilters())); }
+function testDiagrams() { Logger.log(JSON.stringify(getDiagrams({ tab: 'monthly' }))); }
