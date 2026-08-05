@@ -1046,10 +1046,11 @@ function computeAnalyzData(startMonthName,startYear,category){
   const expThis=sumByCategory('exp',thisMonths),expPrev=sumByCategory('exp',prevMonths);
   const incThis=sumByCategory('inc',thisMonths),incPrev=sumByCategory('inc',prevMonths);
   const subThis=sumByDesc('exp',thisMonths,category),subPrev=sumByDesc('exp',prevMonths,category);
+  const subcatSummary=groupSum(allRecords.filter(r=>r._t==='exp'&&inSet(r,thisMonths)&&r.category===category&&r.subcategory),'subcategory');
   return{
     expenses:{rows:combine(expThis,expPrev)},
     income:  {rows:combine(incThis,incPrev)},
-    subcat:  {rows:combine(subThis,subPrev), subcatSummary:groupSum(allRecords.filter(r=>r._t==='exp'&&inSet(r,thisMonths)&&r.category===category&&r.subcategory),'subcategory')}
+    subcat:  {rows:combine(subThis,subPrev), subcatSummary}
   };
 }
 
