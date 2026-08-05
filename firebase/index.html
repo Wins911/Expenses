@@ -764,7 +764,10 @@ function renderRecords(){
     const isOpen=expandedMonths.has(key);
     // Баланс у базовій валюті (K:K), а не сира сума в різних валютах.
     // Дохід +, Витрати -, Бізнес: категорія "Доходи" +, інші (Витрати/Податки) -
-    const balance=g.items.reduce((s,{r})=>s+recordSign(r)*(+r.usd||0),0);
+    const balance=g.items.reduce((s,{r})=>{
+    if(rFilter==='all' && r._t==='biz') return s; // Бізнес не входить у баланс вкладки "Всі"
+    return s+recordSign(r)*(+r.usd||0);
+  },0);
     const baseCur=settings?.mainCurrency||'USD';
     return `
     <div class="month-group">
