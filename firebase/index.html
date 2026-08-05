@@ -503,10 +503,13 @@ function switchAddTab(t){
   document.querySelectorAll('#addTabs .tab').forEach(el=>el.classList.toggle('active',el.dataset.t===t));
   const btn=document.getElementById('saveBtn');
   btn.className='save-btn '+TAB_CFG[t].cls;btn.textContent=TAB_CFG[t].label;
-  buildSel('fCat',cats(t));updateRateBadge();
+  buildSel('fCat',cats(t));updateSubcatVisibility();updateRateBadge();
 }
 function buildSel(id,items,sel=''){
   document.getElementById(id).innerHTML=items.map(c=>`<option value="${x(c)}"${c===sel?' selected':''}>${x(c)}</option>`).join('');
+}
+function updateSubcatVisibility(){
+  document.getElementById('subcatField').style.display = addTab==='exp' ? '' : 'none';
 }
 function setToday(){document.getElementById('fDate').value=new Date().toISOString().split('T')[0];updateRateBadge();}
 function updateRateBadge(){
@@ -556,6 +559,26 @@ function onDescInput(inputId,dropId){
   });
   drop.classList.add('show');
 }
+// ── Subcat Autocomplete ──
+function onSubcatInput(inputId,dropId){
+  const input=document.getElementById(inputId),drop=document.getElementById(dropId);
+  const val=input.value.trim().toLowerCase();
+  const cat=document.getElementById('fCat').value;
+  if(!val){drop.classList.remove('show');return;}
+  const known=[...new Set(allRecords.filter(r=>r._t==='exp'&&r.category===cat&&r.subcategory).map(r=>r.subcategory))];
+  const items=known.filter(d=>d.toLowerCase().includes(val)).slice(0,7);
+  if(!items.length){drop.classList.remove('show');return;}
+  drop.innerHTML=items.map(d=>`<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
+  drop.querySelectorAll('.desc-opt').forEach(el=>{
+    el.addEventListener('mousedown',e=>{
+      e.preventDefault();
+      document.getElementById(inputId).value=el.dataset.val;
+      drop.classList.remove('show');
+    });
+  });
+  drop.classList.add('show');
+}
+
 function hideDescDrop(id){setTimeout(()=>document.getElementById(id)?.classList.remove('show'),200);}
 function pickDesc(inputId,val,dropId){document.getElementById(inputId).value=val;document.getElementById(dropId).classList.remove('show');}
 
@@ -578,9 +601,10 @@ async function saveRecord(){
       const rateResp = await api({action:'getRateSync', currency:cur, to:'USD', date});
       const rateUSD = rateResp.rate || 1;
       const amountUSD = +amt * rateUSD;
+      const subcat = document.getElementById('fSubcat').value.trim();
 
       await fbDb.collection('expenses').add({
-        category: cat, amount: +amt, desc, currency: cur,
+        category: cat, amount: +amt, desc, currency: cur, subcategory: subcat,
         rateUSD, amountUSD,
         date, author: userEmail, status: 'ACTIVE',
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -609,7 +633,7 @@ async function saveRecord(){
 }
 
 function afterSave(btn){
-  document.getElementById('fAmt').value='';document.getElementById('fDesc').value='';
+  document.getElementById('fAmt').value='';document.getElementById('fSubcat').value='';document.getElementById('fDesc').value='';
   btn.disabled=false;btn.textContent=TAB_CFG[addTab].label;
   updateSyncBadge();setTimeout(()=>document.getElementById('fAmt').focus(),150);
 }
@@ -642,13 +666,29 @@ async function loadRecords(){
   if(!navigator.onLine)return;
   try{
     const fresh=[];
-    await Promise.all([{key:'exp',sheet:'expenses'},{key:'inc',sheet:'income'},{key:'biz',sheet:'business'}].map(async s=>{
-      const r=await api({action:'getRecords',sheet:s.sheet,limit:20000});
-      if(r.status==='ok')r.records.forEach(rec=>{rec._t=s.key;fresh.push(rec);});
-    }));
+
+    const expSnap = await fbDb.collection('expenses').where('status','==','ACTIVE').get();
+expSnap.forEach(doc=>{
+  const d=doc.data();
+  fresh.push({
+    row: doc.id, _t:'exp',
+    date: formatFsDate(d.date), category:d.category, amount:d.amount,
+    desc:d.desc, subcategory:d.subcategory||'', currency:d.currency,
+    usd:d.amountUSD||0
+  });
+});
+
+await Promise.all([{key:'inc',sheet:'income'},{key:'biz',sheet:'business'}].map(async s=>{
+  const r=await api({action:'getRecords',sheet:s.sheet,limit:20000});
+  if(r.status==='ok')r.records.forEach(rec=>{rec._t=s.key;fresh.push(rec);});
+}));
+
     fresh.sort((a,b)=>parseDMY(b.date)-parseDMY(a.date));
     allRecords=fresh;await cSet('records',fresh);renderRecords();
   }catch(e){if(!cached)document.getElementById('recContainer').innerHTML='<div class="rec-empty">Помилка завантаження</div>';}
+}
+function formatFsDate(iso){ // "2026-07-10" → "10.07.2026"
+  if(!iso)return'';const p=iso.split('-');return p.length===3?`${p[2]}.${p[1]}.${p[0]}`:iso;
 }
 function parseDMY(s){if(!s)return 0;const p=s.split('.');return p.length===3?new Date(+p[2],+p[1]-1,+p[0]).getTime():0;}
 
@@ -931,9 +971,23 @@ function computeMonthlyData(monthName,year,category){
   const sub=exp.filter(r=>r.category===category);
   return{
     income:  {rows:groupSum(inc,'category')},
-    expenses:{rows:groupSum(exp,'category')},
-    subcat:  {rows:groupSum(sub,'desc')}
+    expenses:{rows:groupSum(exp,'category'), stack:buildCategoryStack(exp)},
+    subcat:  {rows:groupSum(sub,'desc'), subcatSummary:groupSum(sub.filter(r=>r.subcategory),'subcategory')}
   };
+}
+
+function buildCategoryStack(records){
+  const cats=[...new Set(records.map(r=>r.category))];
+  return cats.map(cat=>{
+    const items=records.filter(r=>r.category===cat);
+    const map={};
+    items.forEach(r=>{
+      const k=r.subcategory?r.subcategory:'Без підкатегорії';
+      map[k]=(map[k]||0)+usdOf(r);
+    });
+    return{category:cat, segments:Object.entries(map).sort((a,b)=>b[1]-a[1])};
+  }).filter(c=>c.segments.reduce((s,[,v])=>s+v,0)>0)
+    .sort((a,b)=>b.segments.reduce((s,[,v])=>s+v,0)-a.segments.reduce((s,[,v])=>s+v,0));
 }
 
 function computeAnnualData(startMonthName,startYear){
@@ -1014,8 +1068,29 @@ function fillCanvas(id){
 function renderCharts(t,data){
   Object.keys(charts).forEach(id=>destroyChart(id));
   if(t==='monthly'){
-    put('slide0',()=>makeHBar1('cME','Витрати по категоріях',data.expenses,'exp'));
-    put('slide1',()=>makeHBar1('cMS','По описах вибраної категорії',data.subcat,'sub'));
+    put('slide0',()=>makeStackedHBar('cME','Витрати по категоріях',data.expenses.stack));
+    put('slide1',()=>{
+  const container=document.createElement('div');
+  container.style.cssText='display:flex;flex-direction:column;gap:12px;flex:1;min-height:0';
+  const summary=data.subcat.subcatSummary||[];
+  if(summary.length){
+    const listCard=document.createElement('div');
+    listCard.className='chart-card';
+    listCard.style.flex='0 0 auto';
+    listCard.innerHTML=`<div class="chart-title">Суми по підкатегоріях</div>
+      <div style="display:flex;flex-direction:column;gap:5px;font-size:13px">
+        ${summary.map(([n,v])=>`<div style="display:flex;justify-content:space-between">
+          <span style="color:var(--txt)">${x(n)}</span>
+          <span style="color:var(--sub);font-weight:600">$${v.toFixed(2)}</span>
+        </div>`).join('')}
+      </div>`;
+    container.appendChild(listCard);
+  }
+  const chartCard=makeHBar1('cMS','По описах вибраної категорії',data.subcat,'sub');
+  chartCard.style.flex='1';
+  container.appendChild(chartCard);
+  return container;
+});
     put('slide2',()=>makeHBar1('cMI','Доходи по категоріях',data.income,'inc'));
   }else if(t==='annual'){
     put('slide0',()=>makeGroupedBar('cAB','Баланс по місяцях',data.balance));
@@ -1055,6 +1130,37 @@ function makeHBar1(id,title,sheetData,type){
       plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` $${(+ctx.parsed.x).toFixed(2)}`}}}
     }});
   },50);return card;
+}
+
+const STACK_COLORS=['#f0566a','#f5a623','#4d8ef0','#34c77b','#9b59b6','#1abc9c','#e67e22'];
+
+function makeStackedHBar(id,title,stack){
+  const{wrap,c}=fillCanvas(id);const card=cardWrap(title,wrap);
+  if(!stack||!stack.length){wrap.innerHTML='<div style="text-align:center;color:var(--sub);padding:32px 0">Немає даних</div>';return card;}
+  const labels=stack.map(s=>s.category);
+  const allSegs=[...new Set(stack.flatMap(s=>s.segments.map(([n])=>n)))];
+  const datasets=allSegs.map((segName,i)=>({
+    label:segName,
+    data:stack.map(s=>{const f=s.segments.find(([n])=>n===segName);return f?f[1]:0;}),
+    backgroundColor:STACK_COLORS[i%STACK_COLORS.length],
+    borderRadius:2, maxBarThickness:MAX_BAR_THICKNESS
+  }));
+  setTimeout(()=>{
+    destroyChart(id);
+    charts[id]=new Chart(c,{type:'bar',data:{labels,datasets},options:{
+      indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      layout:{padding:{left:4,right:16,top:4,bottom:4}},
+      scales:{
+        x:{stacked:true,ticks:{color:'#7b83a0',font:{size:10}},grid:{color:'#2e3650'}},
+        y:{stacked:true,ticks:{color:'#e4e8f4',font:{size:11},autoSkip:false},grid:{color:'#2e3650'}}
+      },
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: $${(+ctx.parsed.x).toFixed(2)}`}}
+      }
+    }});
+  },50);
+  return card;
 }
 
 // Compare 2-value horizontal bar (analyz)
