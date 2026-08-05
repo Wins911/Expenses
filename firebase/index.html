@@ -680,7 +680,18 @@ expSnap.forEach(doc=>{
   });
 });
 
-await Promise.all([{key:'inc',sheet:'income'},{key:'biz',sheet:'business'}].map(async s=>{
+const incSnap = await fbDb.collection('income').where('status','==','ACTIVE').get();
+incSnap.forEach(doc=>{
+  const d=doc.data();
+  fresh.push({
+    row: doc.id, _t:'inc',
+    date: formatFsDate(d.date), category:d.category, amount:d.amount,
+    desc:d.desc, currency:d.currency,
+    usd:d.amountUSD||0
+  });
+});
+
+await Promise.all([{key:'biz',sheet:'business'}].map(async s=>{
   const r=await api({action:'getRecords',sheet:s.sheet,limit:20000});
   if(r.status==='ok')r.records.forEach(rec=>{rec._t=s.key;fresh.push(rec);});
 }));
