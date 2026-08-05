@@ -327,6 +327,17 @@ select{padding-right:36px}
     <div class="field"><label class="lbl">Дата</label><input type="date" id="eDate"/></div>
     <div class="field"><label class="lbl">Категорія</label><div class="sel-wrap"><select id="eCat"></select></div></div>
     <div class="field">
+
+<div class="field" id="eSubcatField" style="display:none">
+  <label class="lbl">Підкатегорія <span style="color:var(--sub);font-weight:400;text-transform:none;letter-spacing:0">(необов'язково)</span></label>
+  <div class="desc-wrap">
+    <input type="text" id="eSubcat" placeholder="Введіть або виберіть…" autocomplete="off"
+      oninput="onSubcatInput('eSubcat','eSubcatDrop')"
+      onblur="hideDescDrop('eSubcatDrop')"/>
+    <div class="desc-drop" id="eSubcatDrop"></div>
+  </div>
+</div>
+
       <label class="lbl">Опис</label>
       <div class="desc-wrap">
         <input type="text" id="eDesc" autocomplete="off"
@@ -563,7 +574,7 @@ function onDescInput(inputId,dropId){
 function onSubcatInput(inputId,dropId){
   const input=document.getElementById(inputId),drop=document.getElementById(dropId);
   const val=input.value.trim().toLowerCase();
-  const cat=document.getElementById('fCat').value;
+  const cat = inputId==='fSubcat' ? document.getElementById('fCat').value : document.getElementById('eCat').value;
   if(!val){drop.classList.remove('show');return;}
   const known=[...new Set(allRecords.filter(r=>r._t==='exp'&&r.category===cat&&r.subcategory).map(r=>r.subcategory))];
   const items=known.filter(d=>d.toLowerCase().includes(val)).slice(0,7);
@@ -822,6 +833,9 @@ function openEdit(rec){
     eCurOther.classList.remove('show');
   }
   document.getElementById('eDesc').value=rec.desc||'';
+  document.getElementById('eSubcatField').style.display = rec._t==='exp' ? '' : 'none';
+  document.getElementById('eSubcat').value = rec.subcategory||'';
+  document.getElementById('eSubcatDrop').classList.remove('show');
   document.getElementById('eDescDrop').classList.remove('show');
   const btn=document.getElementById('editSaveBtn');
   btn.className='save-btn '+rec._t;btn.textContent='Зберегти зміни';
@@ -844,30 +858,62 @@ async function saveEdit(){
   if(!currency){showToast('Вкажіть валюту','err');return;}
   const btn=document.getElementById('editSaveBtn');
   btn.disabled=true;btn.innerHTML='<span class="spin"></span>Збереження…';
+
   const isoDate=document.getElementById('eDate').value;
   const dispDate=isoDate.split('-').reverse().join('.');
-  const newData={date:dispDate,category:document.getElementById('eCat').value,amount:+document.getElementById('eAmt').value,currency,desc:document.getElementById('eDesc').value};
+  const category=document.getElementById('eCat').value;
+  const amount=+document.getElementById('eAmt').value;
+  const desc=document.getElementById('eDesc').value;
+  const subcategory = editRec._t==='exp' ? document.getElementById('eSubcat').value.trim() : '';
+  const collection = editRec._t==='exp' ? 'expenses' : editRec._t==='inc' ? 'income' : 'business';
+
   try{
-    const r=await api({action:'updateRecord',sheet:TAB_CFG[editRec._t].sheet,row:editRec.row,date:isoDate,...newData});
-    if(r.status==='ok'){
-      showToast('✓ Збережено','ok');
-      const idx=allRecords.findIndex(r=>r.row===editRec.row&&r._t===editRec._t);
-      if(idx!==-1){allRecords[idx]={...allRecords[idx],...newData};cSet('records',allRecords);}
-      closeEdit();renderRecords();loadRecords();
-    }else showToast('Помилка: '+r.message,'err');
-  }catch(e){showToast('Помилка','err');}
+    const rateResp = await api({action:'getRateSync', currency, to:'USD', date:isoDate});
+    const rateUSD = rateResp.rate || 1;
+    const amountUSD = amount * rateUSD;
+
+  const updateData = {
+  date: dispDate, category, amount, currency, desc,
+  subcategory,
+  rateUSD, amountUSD,
+  updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+};
+
+    let amountUAH = null;
+    if(editRec._t==='biz'){
+      const rateRespUAH = await api({action:'getRateSync', currency, to:'UAH', date:isoDate});
+      const rateUAH = rateRespUAH.rate || 1;
+      updateData.rateUAH = rateUAH;
+      amountUAH = amount * rateUAH;
+      updateData.amountUAH = amountUAH;
+    }
+
+    await fbDb.collection(collection).doc(editRec.row).update(updateData);
+
+    showToast('✓ Збережено','ok');
+    const idx=allRecords.findIndex(r=>r.row===editRec.row&&r._t===editRec._t);
+    if(idx!==-1){
+      allRecords[idx]={...allRecords[idx], date:dispDate, category, amount, currency, desc,
+  subcategory, usd:amountUSD, uah: amountUAH!==null ? amountUAH : allRecords[idx].uah};
+      cSet('records',allRecords);
+    }
+    closeEdit();renderRecords();
+  }catch(e){showToast('Помилка: '+e.message,'err');}
   btn.disabled=false;btn.textContent='Зберегти зміни';
 }
+
 async function doDelete(){
   if(!editRec)return;
   const rec=editRec;closeEdit();
+  const collection = rec._t==='exp' ? 'expenses' : rec._t==='inc' ? 'income' : 'business';
   try{
-    const r=await api({action:'deleteRecord',sheet:TAB_CFG[rec._t].sheet,row:rec.row});
-    if(r.status==='ok'){
-      allRecords=allRecords.filter(r=>!(r.row===rec.row&&r._t===rec._t));
-      cSet('records',allRecords);renderRecords();showToast('🗑 Видалено','ok');
-    }else showToast('Помилка','err');
-  }catch(e){showToast('Помилка','err');}
+    await fbDb.collection(collection).doc(rec.row).update({
+      status: 'DELETED',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    allRecords=allRecords.filter(r=>!(r.row===rec.row&&r._t===rec._t));
+    cSet('records',allRecords);renderRecords();showToast('🗑 Видалено','ok');
+  }catch(e){showToast('Помилка: '+e.message,'err');}
 }
 
 // ── Analytics — обчислюється локально з allRecords (миттєво, офлайн) ──
