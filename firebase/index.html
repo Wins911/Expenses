@@ -1530,8 +1530,22 @@
       try { const r = await api({ action: 'getSettings' }); if (r.status === 'ok') { settings = r; cSet('settings', r); } }
       catch (e) { const c = await cGet('settings'); if (c) settings = c; }
     }
-    const cats = t => settings ? (t === 'exp' ? settings.expenseCategories : t === 'inc' ? settings.incomeCategories : settings.businessCategories || []) : [];
-    const descs = t => settings ? (t === 'exp' ? settings.expenseDescs : t === 'inc' ? settings.incomeDescs : settings.businessDescs || []) : [];
+    // Повертає масив {id, name}, напр. [{id:'ExCat00001',name:'Житло'}, ...]
+    function cats(t) {
+      const dictName = t === 'exp' ? 'expenseCategories' : t === 'inc' ? 'incomeCategories' : 'businessCategories';
+      const dict = dictionaries[dictName] || {};
+      return Object.keys(dict).sort().map(id => ({ id, name: dict[id] }));
+    }
+    // Повертає масив назв (для автопідказки опису/підкатегорії — пошук по тексту)
+    function descs(t) {
+      const dictName = t === 'exp' ? 'expenseDescriptions' : t === 'inc' ? 'incomeDescriptions' : 'businessDescriptions';
+      const dict = dictionaries[dictName] || {};
+      return Object.values(dict);
+    }
+    function subcatNames() {
+      const dict = dictionaries.expenseSubcategories || {};
+      return Object.values(dict);
+    }
 
     const MAX_CURRENCIES = 5; // максимум валют у списку (таблетки + редагування)
     // Повертає масив {id, code}, напр. [{id:'Cur01',code:'USD'}, {id:'Cur02',code:'UAH'}, ...]
@@ -1556,8 +1570,8 @@
       btn.className = 'save-btn ' + TAB_CFG[t].cls; btn.textContent = TAB_CFG[t].label;
       buildSel('fCat', cats(t)); updateSubcatVisibility(); updateRateBadge();
     }
-    function buildSel(id, items, sel = '') {
-      document.getElementById(id).innerHTML = items.map(c => `<option value="${x(c)}"${c === sel ? ' selected' : ''}>${x(c)}</option>`).join('');
+    function buildSel(id, items, selId = '') {
+      document.getElementById(id).innerHTML = items.map(c => `<option value="${x(c.id)}"${c.id === selId ? ' selected' : ''}>${x(c.name)}</option>`).join('');
     }
     function updateSubcatVisibility() {
       document.getElementById('subcatField').style.display = addTab === 'exp' ? '' : 'none';
@@ -1620,11 +1634,17 @@
     function onSubcatInput(inputId, dropId) {
       const input = document.getElementById(inputId), drop = document.getElementById(dropId);
       const val = input.value.trim().toLowerCase();
-      const cat = inputId === 'fSubcat' ? document.getElementById('fCat').value : document.getElementById('eCat').value;
       if (!val) { drop.classList.remove('show'); return; }
-      const known = [...new Set(allRecords.filter(r => r._t === 'exp' && r.category === cat && r.subcategory).map(r => r.subcategory))];
+
+      // Резолвимо обрану категорію (ID → назва), щоб порівняти з allRecords
+      const catId = inputId === 'fSubcat' ? document.getElementById('fCat').value : document.getElementById('eCat').value;
+      const catName = resolveName('expenseCategories', catId) || catId;
+
+      // Підкатегорії, які реально використовувались саме з цією категорією
+      const known = [...new Set(allRecords.filter(r => r._t === 'exp' && r.category === catName && r.subcategory).map(r => r.subcategory))];
       const items = known.filter(d => d.toLowerCase().includes(val)).slice(0, 7);
       if (!items.length) { drop.classList.remove('show'); return; }
+
       drop.innerHTML = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
       drop.querySelectorAll('.desc-opt').forEach(el => {
         el.addEventListener('mousedown', e => {
