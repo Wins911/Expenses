@@ -1631,30 +1631,22 @@
       drop.classList.add('show');
     }
     // ── Subcat Autocomplete ──
-    function onSubcatInput(inputId, dropId) {
-      const input = document.getElementById(inputId), drop = document.getElementById(dropId);
-      const val = input.value.trim().toLowerCase();
-      if (!val) { drop.classList.remove('show'); return; }
-
-      // Резолвимо обрану категорію (ID → назва), щоб порівняти з allRecords
-      const catId = inputId === 'fSubcat' ? document.getElementById('fCat').value : document.getElementById('eCat').value;
-      const catName = resolveName('expenseCategories', catId) || catId;
-
-      // Підкатегорії, які реально використовувались саме з цією категорією
-      const known = [...new Set(allRecords.filter(r => r._t === 'exp' && r.category === catName && r.subcategory).map(r => r.subcategory))];
-      const items = known.filter(d => d.toLowerCase().includes(val)).slice(0, 7);
-      if (!items.length) { drop.classList.remove('show'); return; }
-
-      drop.innerHTML = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
-      drop.querySelectorAll('.desc-opt').forEach(el => {
-        el.addEventListener('mousedown', e => {
-          e.preventDefault();
-          document.getElementById(inputId).value = el.dataset.val;
-          drop.classList.remove('show');
-        });
-      });
-      drop.classList.add('show');
-    }
+function onSubcatInput(inputId, dropId) {
+  const input = document.getElementById(inputId), drop = document.getElementById(dropId);
+  const val = input.value.trim().toLowerCase();
+  if (!val) { drop.classList.remove('show'); return; }
+  const items = subcatNames().filter(d => d.toLowerCase().includes(val)).slice(0, 7);
+  if (!items.length) { drop.classList.remove('show'); return; }
+  drop.innerHTML = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
+  drop.querySelectorAll('.desc-opt').forEach(el => {
+    el.addEventListener('mousedown', e => {
+      e.preventDefault();
+      document.getElementById(inputId).value = el.dataset.val;
+      drop.classList.remove('show');
+    });
+  });
+  drop.classList.add('show');
+}
 
     function hideDescDrop(id) { setTimeout(() => document.getElementById(id)?.classList.remove('show'), 200); }
     function pickDesc(inputId, val, dropId) { document.getElementById(inputId).value = val; document.getElementById(dropId).classList.remove('show'); }
