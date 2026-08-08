@@ -1144,9 +1144,8 @@
           <label class="lbl">Підкатегорія <span
               style="color:var(--sub);font-weight:400;text-transform:none;letter-spacing:0">(необов'язково)</span></label>
           <div class="desc-wrap">
-            <input type="text" id="fSubcat" placeholder="Виберіть підкатегорію…" autocomplete="off" readonly
-              onclick="openSubcatDropdown('fSubcat','fSubcatDrop')" oninput="onSubcatFreeInput('fSubcat','fSubcatDrop')"
-              onblur="hideDescDrop('fSubcatDrop')" />
+            <input type="text" id="fSubcat" placeholder="Введіть або виберіть…" autocomplete="off"
+              oninput="onSubcatInput('fSubcat','fSubcatDrop')" onblur="hideDescDrop('fSubcatDrop')" />
             <div class="desc-drop" id="fSubcatDrop"></div>
           </div>
         </div>
@@ -1293,9 +1292,8 @@
           <label class="lbl">Підкатегорія <span
               style="color:var(--sub);font-weight:400;text-transform:none;letter-spacing:0">(необов'язково)</span></label>
           <div class="desc-wrap">
-            <input type="text" id="eSubcat" placeholder="Виберіть підкатегорію…" autocomplete="off" readonly
-              onclick="openSubcatDropdownEdit('eSubcat','eSubcatDrop')"
-              oninput="onSubcatFreeInputEdit('eSubcat','eSubcatDrop')" onblur="hideDescDrop('eSubcatDrop')" />
+            <input type="text" id="eSubcat" placeholder="Введіть або виберіть…" autocomplete="off"
+              oninput="onSubcatInput('eSubcat','eSubcatDrop')" onblur="hideDescDrop('eSubcatDrop')" />
             <div class="desc-drop" id="eSubcatDrop"></div>
           </div>
         </div>
@@ -1589,19 +1587,13 @@
       document.querySelectorAll('#addTabs .tab').forEach(el => el.classList.toggle('active', el.dataset.t === t));
       const btn = document.getElementById('saveBtn');
       btn.className = 'save-btn ' + TAB_CFG[t].cls; btn.textContent = TAB_CFG[t].label;
-      buildSel('fCat', cats(t)); updateSubcatVisibility(); document.getElementById('fCat').onchange = onAddCatChange; updateRateBadge();
+      buildSel('fCat', cats(t)); updateSubcatVisibility(); updateRateBadge();
     }
     function buildSel(id, items, selId = '') {
-      document.getElementById(id).innerHTML = items.map(c => `<option value="${x(c.id)}"${(c.id === selId || c.name === selId) ? ' selected' : ''}>${x(c.name)}</option>`).join('');
+      document.getElementById(id).innerHTML = items.map(c => `<option value="${x(c.id)}"${c.id === selId ? ' selected' : ''}>${x(c.name)}</option>`).join('');
     }
     function updateSubcatVisibility() {
       document.getElementById('subcatField').style.display = addTab === 'exp' ? '' : 'none';
-      resetSubcatField();
-    }
-    function onAddCatChange() {
-      resetSubcatField();
-      hideDescDrop('fSubcatDrop');
-      hideDescDrop('fDescDrop');
     }
     function setToday() { document.getElementById('fDate').value = new Date().toISOString().split('T')[0]; updateRateBadge(); }
     function updateRateBadge() {
@@ -1644,14 +1636,7 @@
       const val = input.value.trim().toLowerCase();
       const t = inputId === 'fDesc' ? addTab : (editRec?._t || addTab);
       if (!val) { drop.classList.remove('show'); return; }
-
-      const catSelectId = inputId === 'fDesc' ? 'fCat' : 'eCat';
-      const catId = document.getElementById(catSelectId)?.value || '';
-      const catDictName = t === 'exp' ? 'expenseCategories' : t === 'inc' ? 'incomeCategories' : 'businessCategories';
-      const catName = resolveName(catDictName, catId) || catId;
-
-      const known = [...new Set(allRecords.filter(r => r._t === t && (r.categoryId === catId || r.category === catName) && r.desc).map(r => r.desc))];
-      const items = known.filter(d => d.toLowerCase().includes(val)).slice(0, 7);
+      const items = descs(t).filter(d => d.toLowerCase().includes(val)).slice(0, 7);
       if (!items.length) { drop.classList.remove('show'); return; }
       // data-val замість вбудованого JS-рядка — уникає поламки HTML лапками в описі
       drop.innerHTML = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
@@ -1665,121 +1650,22 @@
       drop.classList.add('show');
     }
     // ── Subcat Autocomplete ──
-    let subcatFreeText = false;
-
-    function openSubcatDropdown(inputId, dropId) {
-      if (subcatFreeText) return; // вже в режимі вільного вводу — керує onSubcatFreeInput
-      const input = document.getElementById(inputId), drop = document.getElementById(dropId);
-      const catId = document.getElementById('fCat').value;
-      const catName = resolveName('expenseCategories', catId) || catId;
-      const known = [...new Set(allRecords.filter(r => r._t === 'exp' && (r.categoryId === catId || r.category === catName) && r.subcategory).map(r => r.subcategory))];
-
-      let html = known.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
-      html += `<div class="desc-opt" data-other="1" style="color:var(--acc);font-weight:600">… Інша (ввести текст)</div>`;
-      drop.innerHTML = html;
-
-      drop.querySelectorAll('.desc-opt').forEach(el => {
-        el.addEventListener('mousedown', e => {
-          e.preventDefault();
-          if (el.dataset.other) {
-            subcatFreeText = true;
-            input.removeAttribute('readonly');
-            input.value = '';
-            input.placeholder = 'Введіть нову підкатегорію…';
-            drop.classList.remove('show');
-            input.focus();
-          } else {
-            input.value = el.dataset.val;
-            drop.classList.remove('show');
-          }
-        });
-      });
-      drop.classList.add('show');
-    }
-
-    function onSubcatFreeInput(inputId, dropId) {
-      if (!subcatFreeText) return;
-      const input = document.getElementById(inputId), drop = document.getElementById(dropId);
-      const val = input.value.trim().toLowerCase();
-      const catId = document.getElementById('fCat').value;
-      const catName = resolveName('expenseCategories', catId) || catId;
-      const known = [...new Set(allRecords.filter(r => r._t === 'exp' && (r.categoryId === catId || r.category === catName) && r.subcategory).map(r => r.subcategory))];
-      const items = known.filter(d => d.toLowerCase().includes(val)).slice(0, 7);
-      if (!items.length) { drop.classList.remove('show'); return; }
-      drop.innerHTML = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
-      drop.querySelectorAll('.desc-opt').forEach(el => {
-        el.addEventListener('mousedown', e => {
-          e.preventDefault();
-          input.value = el.dataset.val;
-          drop.classList.remove('show');
-        });
-      });
-      drop.classList.add('show');
-    }
-
-    function resetSubcatField() {
-      subcatFreeText = false;
-      const input = document.getElementById('fSubcat');
-      if (input) { input.setAttribute('readonly', 'readonly'); input.placeholder = 'Виберіть підкатегорію…'; input.value = ''; }
-    }
-
-    let eSubcatFreeText = false;
-
-    function openSubcatDropdownEdit(inputId, dropId) {
-      if (eSubcatFreeText) return;
-      const input = document.getElementById(inputId), drop = document.getElementById(dropId);
-      const catId = document.getElementById('eCat').value;
-      const catName = resolveName('expenseCategories', catId) || catId;
-      const known = [...new Set(allRecords.filter(r => r._t === 'exp' && (r.categoryId === catId || r.category === catName) && r.subcategory).map(r => r.subcategory))];
-
-      let html = known.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
-      html += `<div class="desc-opt" data-other="1" style="color:var(--acc);font-weight:600">… Інша (ввести текст)</div>`;
-      drop.innerHTML = html;
-
-      drop.querySelectorAll('.desc-opt').forEach(el => {
-        el.addEventListener('mousedown', e => {
-          e.preventDefault();
-          if (el.dataset.other) {
-            eSubcatFreeText = true;
-            input.removeAttribute('readonly');
-            input.value = '';
-            input.placeholder = 'Введіть нову підкатегорію…';
-            drop.classList.remove('show');
-            input.focus();
-          } else {
-            input.value = el.dataset.val;
-            drop.classList.remove('show');
-          }
-        });
-      });
-      drop.classList.add('show');
-    }
-
-    function onSubcatFreeInputEdit(inputId, dropId) {
-      if (!eSubcatFreeText) return;
-      const input = document.getElementById(inputId), drop = document.getElementById(dropId);
-      const val = input.value.trim().toLowerCase();
-      const catId = document.getElementById('eCat').value;
-      const catName = resolveName('expenseCategories', catId) || catId;
-      const known = [...new Set(allRecords.filter(r => r._t === 'exp' && (r.categoryId === catId || r.category === catName) && r.subcategory).map(r => r.subcategory))];
-      const items = known.filter(d => d.toLowerCase().includes(val)).slice(0, 7);
-      if (!items.length) { drop.classList.remove('show'); return; }
-      drop.innerHTML = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
-      drop.querySelectorAll('.desc-opt').forEach(el => {
-        el.addEventListener('mousedown', e => {
-          e.preventDefault();
-          input.value = el.dataset.val;
-          drop.classList.remove('show');
-        });
-      });
-      drop.classList.add('show');
-    }
-
-    function resetSubcatFieldEdit() {
-      eSubcatFreeText = false;
-      const input = document.getElementById('eSubcat');
-      if (input) { input.setAttribute('readonly', 'readonly'); input.placeholder = 'Виберіть підкатегорію…'; }
-    }
+function onSubcatInput(inputId, dropId) {
+  const input = document.getElementById(inputId), drop = document.getElementById(dropId);
+  const val = input.value.trim().toLowerCase();
+  if (!val) { drop.classList.remove('show'); return; }
+  const items = subcatNames().filter(d => d.toLowerCase().includes(val)).slice(0, 7);
+  if (!items.length) { drop.classList.remove('show'); return; }
+  drop.innerHTML = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
+  drop.querySelectorAll('.desc-opt').forEach(el => {
+    el.addEventListener('mousedown', e => {
+      e.preventDefault();
+      document.getElementById(inputId).value = el.dataset.val;
+      drop.classList.remove('show');
+    });
+  });
+  drop.classList.add('show');
+}
 
     function hideDescDrop(id) { setTimeout(() => document.getElementById(id)?.classList.remove('show'), 200); }
     function pickDesc(inputId, val, dropId) { document.getElementById(inputId).value = val; document.getElementById(dropId).classList.remove('show'); }
@@ -1879,13 +1765,10 @@
         const expSnap = await fbDb.collection('expenses').where('status', '==', 'ACTIVE').get();
         expSnap.forEach(doc => {
           const d = doc.data();
-          const catName = resolveName('expenseCategories', d.categoryId) || d.category || '';
-          const subcatName = resolveName('expenseSubcategories', d.subcategoryId) || d.subcategory || '';
-          const descName = resolveName('expenseDescriptions', d.descId) || d.desc || '';
           fresh.push({
             row: doc.id, _t: 'exp',
-            date: formatFsDate(d.date), category: catName, categoryId: d.categoryId || '', amount: d.amount,
-            desc: descName, subcategory: subcatName, currency: d.currency,
+            date: formatFsDate(d.date), category: d.category, amount: d.amount,
+            desc: d.desc, subcategory: d.subcategory || '', currency: d.currency,
             usd: d.amountUSD || 0
           });
         });
@@ -1893,12 +1776,10 @@
         const incSnap = await fbDb.collection('income').where('status', '==', 'ACTIVE').get();
         incSnap.forEach(doc => {
           const d = doc.data();
-          const catName = resolveName('incomeCategories', d.categoryId) || d.category || '';
-          const descName = resolveName('incomeDescriptions', d.descId) || d.desc || '';
           fresh.push({
             row: doc.id, _t: 'inc',
-            date: formatFsDate(d.date), category: catName, categoryId: d.categoryId || '', amount: d.amount,
-            desc: descName, currency: d.currency,
+            date: formatFsDate(d.date), category: d.category, amount: d.amount,
+            desc: d.desc, currency: d.currency,
             usd: d.amountUSD || 0
           });
         });
@@ -1906,12 +1787,10 @@
         const bizSnap = await fbDb.collection('business').where('status', '==', 'ACTIVE').get();
         bizSnap.forEach(doc => {
           const d = doc.data();
-          const catName = resolveName('businessCategories', d.categoryId) || d.category || '';
-          const descName = resolveName('businessDescriptions', d.descId) || d.desc || '';
           fresh.push({
             row: doc.id, _t: 'biz',
-            date: formatFsDate(d.date), category: catName, categoryId: d.categoryId || '', amount: d.amount,
-            desc: descName, currency: d.currency,
+            date: formatFsDate(d.date), category: d.category, amount: d.amount,
+            desc: d.desc, currency: d.currency,
             usd: d.amountUSD || 0, uah: d.amountUAH || 0
           });
         });
@@ -2014,14 +1893,6 @@
       document.getElementById('eDate').value = rec.date.split('.').reverse().join('-');
       document.getElementById('eAmt').value = rec.amount;
       buildSel('eCat', cats(rec._t), rec.category);
-      const eCatEl = document.getElementById('eCat');
-      if (eCatEl) eCatEl.onchange = () => {
-        const subInput = document.getElementById('eSubcat');
-        if (subInput) subInput.value = '';
-        resetSubcatFieldEdit();
-        hideDescDrop('eSubcatDrop');
-        hideDescDrop('eDescDrop');
-      };
       const curs = getCurs();
       const eCur = document.getElementById('eCur');
       const eCurOther = document.getElementById('eCurOther');
@@ -2038,7 +1909,6 @@
         eCurOther.classList.remove('show');
       }
       document.getElementById('eDesc').value = rec.desc || '';
-      resetSubcatFieldEdit();
       document.getElementById('eSubcatField').style.display = rec._t === 'exp' ? '' : 'none';
       document.getElementById('eSubcat').value = rec.subcategory || '';
       document.getElementById('eSubcatDrop').classList.remove('show');
