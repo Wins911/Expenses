@@ -1383,11 +1383,77 @@
     let cubeTipTimer = null;
     let tokenRefreshDone = false;
 
+    // ── Довідники (dictionaries) — категорії/підкатегорії/описи/валюти через ID ──
+    let dictionaries = {}; // { expenseCategories:{ExCat00001:'Житло',...}, currencies:{Cur01:'USD',...,baseCurrency:'USD',localCurrency:'UAH'}, ... }
+    let dictionariesLoaded = false;
+
     // ── IndexedDB ──
     let idb = null;
     async function openIDB() { if (idb) return idb; return new Promise((res, rej) => { const r = indexedDB.open('BudgetApp3', 1); r.onupgradeneeded = e => e.target.result.createObjectStore('cache', { keyPath: 'k' }); r.onsuccess = e => { idb = e.target.result; res(idb) }; r.onerror = () => rej(r.error) }); }
     async function cGet(k) { try { const d = await openIDB(); return new Promise(res => { const r = d.transaction('cache', 'readonly').objectStore('cache').get(k); r.onsuccess = () => res(r.result?.v ?? null); r.onerror = () => res(null) }) } catch (e) { return null } }
     async function cSet(k, v) { try { const d = await openIDB(); const tx = d.transaction('cache', 'readwrite'); tx.objectStore('cache').put({ k, v, ts: Date.now() }) } catch (e) { } }
+
+    // ── Завантаження довідників з Firestore ──
+    const DICT_DOCS = [
+      'expenseCategories', 'incomeCategories', 'businessCategories',
+      'expenseSubcategories',
+      'expenseDescriptions', 'incomeDescriptions', 'businessDescriptions',
+      'currencies', 'months', 'counters'
+    ];
+    async function loadDictionaries() {
+      try {
+        const results = await Promise.all(
+          DICT_DOCS.map(name => fbDb.collection('dictionaries').doc(name).get())
+        );
+        DICT_DOCS.forEach((name, i) => {
+          dictionaries[name] = results[i].exists ? results[i].data() : {};
+        });
+        dictionariesLoaded = true;
+        cSet('dictionaries', dictionaries);
+      } catch (e) {
+        const cached = await cGet('dictionaries');
+        if (cached) { dictionaries = cached; dictionariesLoaded = true; }
+        else showToast('Не вдалось завантажити довідники: ' + e.message, 'err');
+      }
+    }
+
+    // ── Резолв ID → назва (для показу) ──
+    function resolveName(dictName, id) {
+      if (!id) return '';
+      return dictionaries[dictName]?.[id] || id; // якщо не знайдено — показуємо сам ID як фолбек
+    }
+    // ── Резолв назва → ID (для запису, точний, без урахування регістру) ──
+    function resolveId(dictName, name) {
+      if (!name) return '';
+      const dict = dictionaries[dictName] || {};
+      const found = Object.entries(dict).find(([, v]) => typeof v === 'string' && v.toLowerCase() === name.toLowerCase());
+      return found ? found[0] : '';
+    }
+
+    // ── Атомарна генерація наступного ID за префіксом (транзакція, безпечно при одночасних записах) ──
+    async function getNextDictId(prefix) {
+      const ref = fbDb.collection('dictionaries').doc('counters');
+      return fbDb.runTransaction(async tx => {
+        const doc = await tx.get(ref);
+        const data = doc.exists ? doc.data() : {};
+        const next = (data[prefix] || 0) + 1;
+        tx.set(ref, { ...data, [prefix]: next }, { merge: true });
+        return prefix + String(next).padStart(5, '0');
+      });
+    }
+
+    // ── Знайти існуючий ID за текстом, або створити новий запис у довіднику ──
+    async function resolveOrCreate(dictName, prefix, text) {
+      if (!text) return '';
+      const existingId = resolveId(dictName, text);
+      if (existingId) return existingId;
+      const newId = await getNextDictId(prefix);
+      await fbDb.collection('dictionaries').doc(dictName).set({ [newId]: text }, { merge: true });
+      if (!dictionaries[dictName]) dictionaries[dictName] = {};
+      dictionaries[dictName][newId] = text; // одразу оновлюємо локальний кеш
+      cSet('dictionaries', dictionaries);
+      return newId;
+    }
 
     // ── OAuth ──
     window.onload = function () {
@@ -1414,6 +1480,7 @@
       document.getElementById('appScreen').classList.add('active');
       document.getElementById('userBadge').textContent = userEmail;
       updateOfflineBar(); updateSyncBadge(); setToday();
+      await loadDictionaries();
       await loadSettings();
       try {
         const r = await api({ action: 'whoAmI' });
