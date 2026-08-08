@@ -1455,6 +1455,25 @@
       return newId;
     }
 
+    // ── Валюта: окремий резолв, ігнорує службові поля baseCurrency/localCurrency ──
+    function resolveCurrencyId(code) {
+      if (!code) return '';
+      const dict = dictionaries.currencies || {};
+      const found = Object.entries(dict).find(([k, v]) => k.startsWith('Cur') && typeof v === 'string' && v.toLowerCase() === code.toLowerCase());
+      return found ? found[0] : '';
+    }
+    async function resolveOrCreateCurrency(code) {
+      if (!code) return '';
+      const existing = resolveCurrencyId(code);
+      if (existing) return existing;
+      const newId = await getNextDictId('Cur');
+      await fbDb.collection('dictionaries').doc('currencies').set({ [newId]: code }, { merge: true });
+      if (!dictionaries.currencies) dictionaries.currencies = {};
+      dictionaries.currencies[newId] = code;
+      cSet('dictionaries', dictionaries);
+      return newId;
+    }
+
     // ── OAuth ──
     window.onload = function () {
       const tk = localStorage.getItem('gToken'), em = localStorage.getItem('gEmail');
@@ -1653,63 +1672,59 @@ function onSubcatInput(inputId, dropId) {
 
     // ── Save Record ──
     async function saveRecord() {
-      const date = document.getElementById('fDate').value, cat = document.getElementById('fCat').value;
+      const date = document.getElementById('fDate').value, catId = document.getElementById('fCat').value;
       const amt = document.getElementById('fAmt').value.trim(), desc = document.getElementById('fDesc').value.trim();
-      const cur = activeCur();
+      const cur = activeCur(); // код валюти, напр. "UAH"
       if (!date) { showToast('Вкажіть дату', 'err'); return; }
-      if (!cat) { showToast('Виберіть категорію', 'err'); return; }
+      if (!catId) { showToast('Виберіть категорію', 'err'); return; }
       if (!amt || +amt === 0) { showToast('Введіть суму', 'err'); return; }
       if (!cur) { showToast('Вкажіть валюту', 'err'); return; }
 
       const btn = document.getElementById('saveBtn');
       btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Збереження…';
 
-      // ── НОВИЙ ШЛЯХ: тільки для Витрат, через Firestore ──
-      if (addTab === 'exp' || addTab === 'inc' || addTab === 'biz') {
-        try {
-          const rateResp = await api({ action: 'getRateSync', currency: cur, to: 'USD', date });
-          const rateUSD = rateResp.rate || 1;
-          const amountUSD = +amt * rateUSD;
-
-          let rateUAH = 1, amountUAH = 0;
-          if (addTab === 'biz') {
-            const rateRespUAH = await api({ action: 'getRateSync', currency: cur, to: 'UAH', date });
-            rateUAH = rateRespUAH.rate || 1;
-            amountUAH = +amt * rateUAH;
-          }
-          const subcat = document.getElementById('fSubcat').value.trim();
-
-          const targetCollection = addTab === 'exp' ? 'expenses' : addTab === 'inc' ? 'income' : 'business';
-          await fbDb.collection(targetCollection).add({
-            category: cat, amount: +amt, desc, currency: cur,
-            subcategory: addTab === 'exp' ? subcat : '',
-            rateUSD, amountUSD,
-            rateUAH: addTab === 'biz' ? rateUAH : null,
-            amountUAH: addTab === 'biz' ? amountUAH : null,
-            date, author: userEmail, status: 'ACTIVE',
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-          });
-
-          showToast('✓ Збережено (Firestore)', 'ok'); afterSave(btn);
-        } catch (e) {
-          showToast('Помилка Firestore: ' + e.message, 'err');
-          btn.disabled = false; btn.textContent = TAB_CFG[addTab].label;
-        }
-        return;
-      }
-
-      // ── СТАРИЙ ШЛЯХ: Доходи/Бізнес поки лишаються на Sheets ──
-      const uuid = genUUID(userEmail);
-      const payload = { action: 'addRecord', sheet: TAB_CFG[addTab].sheet, uuid, date, category: cat, amount: amt, desc, currency: cur, offline: !navigator.onLine };
-      if (!navigator.onLine) { offlineQueue.push(payload); saveQueue(); showToast('⚡ Збережено офлайн', 'info'); afterSave(btn); return; }
       try {
-        const r = await api(payload);
-        if (r.status === 'ok') {
-          showToast('✓ Збережено', 'ok'); afterSave(btn); cSet('records', null);
-          setTimeout(() => api({ action: 'resolveRate', sheet: TAB_CFG[addTab].sheet, row: r.row }).catch(() => { }), 4000);
-        } else { showToast('Помилка: ' + r.message, 'err'); btn.disabled = false; btn.textContent = TAB_CFG[addTab].label; }
-      } catch (e) { offlineQueue.push(payload); saveQueue(); showToast('⚡ Збережено офлайн', 'info'); afterSave(btn); }
+        // ── Резолвимо/створюємо ID для валюти, опису, підкатегорії ──
+        const currencyId = (selectedCur?.id && selectedCur.id !== '__other__')
+          ? selectedCur.id
+          : await resolveOrCreateCurrency(cur);
+
+        const descDictName = addTab === 'exp' ? 'expenseDescriptions' : addTab === 'inc' ? 'incomeDescriptions' : 'businessDescriptions';
+        const descPrefix = addTab === 'exp' ? 'ExDsc' : addTab === 'inc' ? 'InDsc' : 'BzDsc';
+        const descId = desc ? await resolveOrCreate(descDictName, descPrefix, desc) : '';
+
+        const subcat = document.getElementById('fSubcat').value.trim();
+        const subcategoryId = (addTab === 'exp' && subcat) ? await resolveOrCreate('expenseSubcategories', 'ExSub', subcat) : '';
+
+        const rateResp = await api({ action: 'getRateSync', currency: cur, to: 'USD', date });
+        const rateUSD = rateResp.rate || 1;
+        const amountUSD = +amt * rateUSD;
+
+        let rateUAH = 1, amountUAH = 0;
+        if (addTab === 'biz') {
+          const rateRespUAH = await api({ action: 'getRateSync', currency: cur, to: 'UAH', date });
+          rateUAH = rateRespUAH.rate || 1;
+          amountUAH = +amt * rateUAH;
+        }
+
+        const targetCollection = addTab === 'exp' ? 'expenses' : addTab === 'inc' ? 'income' : 'business';
+        const docData = {
+          categoryId: catId, amount: +amt, descId, currencyId,
+          subcategoryId,
+          rateUSD, amountUSD,
+          date, author: userEmail, status: 'ACTIVE',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        if (addTab === 'biz') { docData.rateUAH = rateUAH; docData.amountUAH = amountUAH; }
+
+        await fbDb.collection(targetCollection).add(docData);
+
+        showToast('✓ Збережено', 'ok'); afterSave(btn);
+      } catch (e) {
+        showToast('Помилка: ' + e.message, 'err');
+        btn.disabled = false; btn.textContent = TAB_CFG[addTab].label;
+      }
     }
 
     function afterSave(btn) {
