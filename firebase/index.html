@@ -1650,7 +1650,7 @@
       const catDictName = t === 'exp' ? 'expenseCategories' : t === 'inc' ? 'incomeCategories' : 'businessCategories';
       const catName = resolveName(catDictName, catId) || catId;
 
-      const known = [...new Set(allRecords.filter(r => r._t === t && r.category === catName && r.desc).map(r => r.desc))];
+      const known = [...new Set(allRecords.filter(r => r._t === t && (r.categoryId === catId || r.category === catName) && r.desc).map(r => r.desc))];
       const items = known.filter(d => d.toLowerCase().includes(val)).slice(0, 7);
       if (!items.length) { drop.classList.remove('show'); return; }
       // data-val замість вбудованого JS-рядка — уникає поламки HTML лапками в описі
@@ -1672,7 +1672,7 @@
       const input = document.getElementById(inputId), drop = document.getElementById(dropId);
       const catId = document.getElementById('fCat').value;
       const catName = resolveName('expenseCategories', catId) || catId;
-      const known = [...new Set(allRecords.filter(r => r._t === 'exp' && r.category === catName && r.subcategory).map(r => r.subcategory))];
+      const known = [...new Set(allRecords.filter(r => r._t === 'exp' && (r.categoryId === catId || r.category === catName) && r.subcategory).map(r => r.subcategory))];
 
       let html = known.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
       html += `<div class="desc-opt" data-other="1" style="color:var(--acc);font-weight:600">… Інша (ввести текст)</div>`;
@@ -1703,7 +1703,7 @@
       const val = input.value.trim().toLowerCase();
       const catId = document.getElementById('fCat').value;
       const catName = resolveName('expenseCategories', catId) || catId;
-      const known = [...new Set(allRecords.filter(r => r._t === 'exp' && r.category === catName && r.subcategory).map(r => r.subcategory))];
+      const known = [...new Set(allRecords.filter(r => r._t === 'exp' && (r.categoryId === catId || r.category === catName) && r.subcategory).map(r => r.subcategory))];
       const items = known.filter(d => d.toLowerCase().includes(val)).slice(0, 7);
       if (!items.length) { drop.classList.remove('show'); return; }
       drop.innerHTML = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
@@ -1730,7 +1730,7 @@
       const input = document.getElementById(inputId), drop = document.getElementById(dropId);
       const catId = document.getElementById('eCat').value;
       const catName = resolveName('expenseCategories', catId) || catId;
-      const known = [...new Set(allRecords.filter(r => r._t === 'exp' && r.category === catName && r.subcategory).map(r => r.subcategory))];
+      const known = [...new Set(allRecords.filter(r => r._t === 'exp' && (r.categoryId === catId || r.category === catName) && r.subcategory).map(r => r.subcategory))];
 
       let html = known.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
       html += `<div class="desc-opt" data-other="1" style="color:var(--acc);font-weight:600">… Інша (ввести текст)</div>`;
@@ -1761,7 +1761,7 @@
       const val = input.value.trim().toLowerCase();
       const catId = document.getElementById('eCat').value;
       const catName = resolveName('expenseCategories', catId) || catId;
-      const known = [...new Set(allRecords.filter(r => r._t === 'exp' && r.category === catName && r.subcategory).map(r => r.subcategory))];
+      const known = [...new Set(allRecords.filter(r => r._t === 'exp' && (r.categoryId === catId || r.category === catName) && r.subcategory).map(r => r.subcategory))];
       const items = known.filter(d => d.toLowerCase().includes(val)).slice(0, 7);
       if (!items.length) { drop.classList.remove('show'); return; }
       drop.innerHTML = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
@@ -1879,10 +1879,13 @@
         const expSnap = await fbDb.collection('expenses').where('status', '==', 'ACTIVE').get();
         expSnap.forEach(doc => {
           const d = doc.data();
+          const catName = resolveName('expenseCategories', d.categoryId) || d.category || '';
+          const subcatName = resolveName('expenseSubcategories', d.subcategoryId) || d.subcategory || '';
+          const descName = resolveName('expenseDescriptions', d.descId) || d.desc || '';
           fresh.push({
             row: doc.id, _t: 'exp',
-            date: formatFsDate(d.date), category: d.category, amount: d.amount,
-            desc: d.desc, subcategory: d.subcategory || '', currency: d.currency,
+            date: formatFsDate(d.date), category: catName, categoryId: d.categoryId || '', amount: d.amount,
+            desc: descName, subcategory: subcatName, currency: d.currency,
             usd: d.amountUSD || 0
           });
         });
@@ -1890,10 +1893,12 @@
         const incSnap = await fbDb.collection('income').where('status', '==', 'ACTIVE').get();
         incSnap.forEach(doc => {
           const d = doc.data();
+          const catName = resolveName('incomeCategories', d.categoryId) || d.category || '';
+          const descName = resolveName('incomeDescriptions', d.descId) || d.desc || '';
           fresh.push({
             row: doc.id, _t: 'inc',
-            date: formatFsDate(d.date), category: d.category, amount: d.amount,
-            desc: d.desc, currency: d.currency,
+            date: formatFsDate(d.date), category: catName, categoryId: d.categoryId || '', amount: d.amount,
+            desc: descName, currency: d.currency,
             usd: d.amountUSD || 0
           });
         });
@@ -1901,10 +1906,12 @@
         const bizSnap = await fbDb.collection('business').where('status', '==', 'ACTIVE').get();
         bizSnap.forEach(doc => {
           const d = doc.data();
+          const catName = resolveName('businessCategories', d.categoryId) || d.category || '';
+          const descName = resolveName('businessDescriptions', d.descId) || d.desc || '';
           fresh.push({
             row: doc.id, _t: 'biz',
-            date: formatFsDate(d.date), category: d.category, amount: d.amount,
-            desc: d.desc, currency: d.currency,
+            date: formatFsDate(d.date), category: catName, categoryId: d.categoryId || '', amount: d.amount,
+            desc: descName, currency: d.currency,
             usd: d.amountUSD || 0, uah: d.amountUAH || 0
           });
         });
