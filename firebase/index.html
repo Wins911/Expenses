@@ -1143,10 +1143,10 @@
         <div class="field" id="subcatField">
           <label class="lbl">Підкатегорія <span
               style="color:var(--sub);font-weight:400;text-transform:none;letter-spacing:0">(необов'язково)</span></label>
-          <div class="desc-wrap">
+          <div class="desc-wrap sel-wrap">
             <input type="text" id="fSubcat" placeholder="Виберіть підкатегорію…" autocomplete="off" readonly
-              onclick="openSubcatDropdown('fSubcat','fSubcatDrop')" oninput="onSubcatFreeInput('fSubcat','fSubcatDrop')"
-              onblur="hideDescDrop('fSubcatDrop')" />
+              style="padding-right:36px;cursor:pointer" onclick="openSubcatDropdown('fSubcat','fSubcatDrop')"
+              oninput="onSubcatFreeInput('fSubcat','fSubcatDrop')" onblur="hideDescDrop('fSubcatDrop')" />
             <div class="desc-drop" id="fSubcatDrop"></div>
           </div>
         </div>
@@ -1292,9 +1292,9 @@
         <div class="field" id="eSubcatField" style="display:none">
           <label class="lbl">Підкатегорія <span
               style="color:var(--sub);font-weight:400;text-transform:none;letter-spacing:0">(необов'язково)</span></label>
-          <div class="desc-wrap">
+          <div class="desc-wrap sel-wrap">
             <input type="text" id="eSubcat" placeholder="Виберіть підкатегорію…" autocomplete="off" readonly
-              onclick="openSubcatDropdownEdit('eSubcat','eSubcatDrop')"
+              style="padding-right:36px;cursor:pointer" onclick="openSubcatDropdownEdit('eSubcat','eSubcatDrop')"
               oninput="onSubcatFreeInputEdit('eSubcat','eSubcatDrop')" onblur="hideDescDrop('eSubcatDrop')" />
             <div class="desc-drop" id="eSubcatDrop"></div>
           </div>
@@ -1512,6 +1512,7 @@
         if (r.status === 'ok') myPrefix = r.prefix;
       } catch (e) { }
       buildCurrencyPills(); switchAddTab('exp');
+      loadRecords(); // запускаємо у фоні, без очікування — наповнює allRecords для підказок одразу при старті
       if (appStarted) return; // avoid duplicate intervals/listeners if called twice
       appStarted = true;
       initCarouselSwipe(); initPTR();
