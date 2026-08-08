@@ -1476,6 +1476,10 @@
       return newId;
     }
 
+    function currencyCodeOf(id) {
+      return dictionaries.currencies?.[id] || id || '';
+    }
+
     // ── OAuth ──
     window.onload = function () {
       const tk = localStorage.getItem('gToken'), em = localStorage.getItem('gEmail');
@@ -1823,7 +1827,19 @@
         };
         if (addTab === 'biz') { docData.rateUAH = rateUAH; docData.amountUAH = amountUAH; }
 
-        await fbDb.collection(targetCollection).add(docData);
+        const docRef = await fbDb.collection(targetCollection).add(docData);
+
+        const catDictName = addTab === 'exp' ? 'expenseCategories' : addTab === 'inc' ? 'incomeCategories' : 'businessCategories';
+        allRecords.unshift({
+          row: docRef.id, _t: addTab,
+          date: formatFsDate(date), amount: +amt,
+          categoryId: catId, category: resolveName(catDictName, catId),
+          descId, desc: resolveName(descDictName, descId),
+          subcategoryId, subcategory: resolveName('expenseSubcategories', subcategoryId),
+          currencyId, currency: cur,
+          usd: amountUSD, uah: addTab === 'biz' ? amountUAH : undefined
+        });
+        cSet('records', allRecords);
 
         showToast('✓ Збережено', 'ok'); afterSave(btn);
       } catch (e) {
@@ -1872,8 +1888,11 @@
           const d = doc.data();
           fresh.push({
             row: doc.id, _t: 'exp',
-            date: formatFsDate(d.date), category: d.category, amount: d.amount,
-            desc: d.desc, subcategory: d.subcategory || '', currency: d.currency,
+            date: formatFsDate(d.date), amount: d.amount,
+            categoryId: d.categoryId, category: resolveName('expenseCategories', d.categoryId),
+            descId: d.descId, desc: resolveName('expenseDescriptions', d.descId),
+            subcategoryId: d.subcategoryId || '', subcategory: resolveName('expenseSubcategories', d.subcategoryId),
+            currencyId: d.currencyId, currency: currencyCodeOf(d.currencyId),
             usd: d.amountUSD || 0
           });
         });
@@ -1883,8 +1902,10 @@
           const d = doc.data();
           fresh.push({
             row: doc.id, _t: 'inc',
-            date: formatFsDate(d.date), category: d.category, amount: d.amount,
-            desc: d.desc, currency: d.currency,
+            date: formatFsDate(d.date), amount: d.amount,
+            categoryId: d.categoryId, category: resolveName('incomeCategories', d.categoryId),
+            descId: d.descId, desc: resolveName('incomeDescriptions', d.descId),
+            currencyId: d.currencyId, currency: currencyCodeOf(d.currencyId),
             usd: d.amountUSD || 0
           });
         });
@@ -1894,8 +1915,10 @@
           const d = doc.data();
           fresh.push({
             row: doc.id, _t: 'biz',
-            date: formatFsDate(d.date), category: d.category, amount: d.amount,
-            desc: d.desc, currency: d.currency,
+            date: formatFsDate(d.date), amount: d.amount,
+            categoryId: d.categoryId, category: resolveName('businessCategories', d.categoryId),
+            descId: d.descId, desc: resolveName('businessDescriptions', d.descId),
+            currencyId: d.currencyId, currency: currencyCodeOf(d.currencyId),
             usd: d.amountUSD || 0, uah: d.amountUAH || 0
           });
         });
@@ -1997,28 +2020,33 @@
       document.getElementById('editTitle').textContent = `${lbl} · ${rec.date}`;
       document.getElementById('eDate').value = rec.date.split('.').reverse().join('-');
       document.getElementById('eAmt').value = rec.amount;
-      buildSel('eCat', cats(rec._t), rec.category);
+
+      buildSel('eCat', cats(rec._t), rec.categoryId);
+
       const curs = getCurs();
       const eCur = document.getElementById('eCur');
       const eCurOther = document.getElementById('eCurOther');
-      let curOptions = curs.map(c => `<option value="${c}"${c === rec.currency ? ' selected' : ''}>${c}</option>`).join('');
+      let curOptions = curs.map(c => `<option value="${c.id}"${c.id === rec.currencyId ? ' selected' : ''}>${c.code}</option>`).join('');
       curOptions += `<option value="__other__">Інша валюта…</option>`;
       eCur.innerHTML = curOptions;
-      if (!curs.includes(rec.currency)) {
-        // Валюта запису не входить у стандартний список — вибираємо "Інша" і показуємо поле
+      const knownIds = curs.map(c => c.id);
+      if (!knownIds.includes(rec.currencyId)) {
         eCur.value = '__other__';
-        eCurOther.value = rec.currency;
+        eCurOther.value = rec.currency || '';
         eCurOther.classList.add('show');
       } else {
         eCurOther.value = '';
         eCurOther.classList.remove('show');
       }
+
       document.getElementById('eDesc').value = rec.desc || '';
+      document.getElementById('eDescDrop').classList.remove('show');
+
       resetSubcatFieldEdit();
       document.getElementById('eSubcatField').style.display = rec._t === 'exp' ? '' : 'none';
       document.getElementById('eSubcat').value = rec.subcategory || '';
       document.getElementById('eSubcatDrop').classList.remove('show');
-      document.getElementById('eDescDrop').classList.remove('show');
+
       const btn = document.getElementById('editSaveBtn');
       btn.className = 'save-btn ' + rec._t; btn.textContent = 'Зберегти зміни';
       document.getElementById('editOv').classList.add('show');
@@ -2043,20 +2071,29 @@
 
       const isoDate = document.getElementById('eDate').value;
       const dispDate = isoDate.split('-').reverse().join('.');
-      const category = document.getElementById('eCat').value;
+      const catId = document.getElementById('eCat').value;
       const amount = +document.getElementById('eAmt').value;
-      const desc = document.getElementById('eDesc').value;
-      const subcategory = editRec._t === 'exp' ? document.getElementById('eSubcat').value.trim() : '';
+      const descText = document.getElementById('eDesc').value.trim();
+      const subcatText = document.getElementById('eSubcat').value.trim();
       const collection = editRec._t === 'exp' ? 'expenses' : editRec._t === 'inc' ? 'income' : 'business';
 
       try {
+        const eCurSel = document.getElementById('eCur').value;
+        const currencyId = eCurSel === '__other__' ? await resolveOrCreateCurrency(currency) : eCurSel;
+
+        const descDictName = editRec._t === 'exp' ? 'expenseDescriptions' : editRec._t === 'inc' ? 'incomeDescriptions' : 'businessDescriptions';
+        const descPrefix = editRec._t === 'exp' ? 'ExDsc' : editRec._t === 'inc' ? 'InDsc' : 'BzDsc';
+        const descId = descText ? await resolveOrCreate(descDictName, descPrefix, descText) : '';
+
+        const subcategoryId = (editRec._t === 'exp' && subcatText) ? await resolveOrCreate('expenseSubcategories', 'ExSub', subcatText) : '';
+
         const rateResp = await api({ action: 'getRateSync', currency, to: 'USD', date: isoDate });
         const rateUSD = rateResp.rate || 1;
         const amountUSD = amount * rateUSD;
 
         const updateData = {
-          date: dispDate, category, amount, currency, desc,
-          subcategory,
+          date: dispDate, categoryId, amount, currencyId, descId,
+          subcategoryId,
           rateUSD, amountUSD,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
@@ -2073,11 +2110,17 @@
         await fbDb.collection(collection).doc(editRec.row).update(updateData);
 
         showToast('✓ Збережено', 'ok');
+        const catDictName = editRec._t === 'exp' ? 'expenseCategories' : editRec._t === 'inc' ? 'incomeCategories' : 'businessCategories';
         const idx = allRecords.findIndex(r => r.row === editRec.row && r._t === editRec._t);
         if (idx !== -1) {
           allRecords[idx] = {
-            ...allRecords[idx], date: dispDate, category, amount, currency, desc,
-            subcategory, usd: amountUSD, uah: amountUAH !== null ? amountUAH : allRecords[idx].uah
+            ...allRecords[idx],
+            date: dispDate, amount,
+            categoryId, category: resolveName(catDictName, catId),
+            descId, desc: resolveName(descDictName, descId),
+            subcategoryId, subcategory: resolveName('expenseSubcategories', subcategoryId),
+            currencyId, currency,
+            usd: amountUSD, uah: amountUAH !== null ? amountUAH : allRecords[idx].uah
           };
           cSet('records', allRecords);
         }
