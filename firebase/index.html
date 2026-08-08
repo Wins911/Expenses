@@ -1650,91 +1650,22 @@
       drop.classList.add('show');
     }
     // ── Subcat Autocomplete ──
-    let isSubcatCustomInput = false;
-
-    function openSubcatDropdown(inputId, dropId) {
-      const input = document.getElementById(inputId);
-      const drop = document.getElementById(dropId);
-      const catId = inputId === 'fSubcat' ? document.getElementById('fCat').value : document.getElementById('eCat').value;
-      
-      const filtered = getSubcatsForCategory(catId);
-      
-      let html = '';
-      if (!isSubcatCustomInput) {
-        // Показуємо тільки використані з цією категорією + внизу "..."
-        if (filtered.length) {
-          html += filtered.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
-        } else {
-          html += `<div class="desc-opt" style="color:var(--sub);cursor:default">Немає збережених підкатегорій</div>`;
-        }
-        html += `<div class="desc-opt" id="${inputId}-more" style="font-weight:700;color:var(--acc);text-align:center">… (інша / нова)</div>`;
-      } else {
-        // Режим вільного введення з пошуком по всіх підкатегоріях
-        const val = input.value.trim().toLowerCase();
-        const all = subcatNames();
-        const items = val ? all.filter(d => d.toLowerCase().includes(val)).slice(0, 7) : all.slice(0, 7);
-        
-        if (items.length) {
-          html = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
-        } else {
-          html = `<div class="desc-opt" style="color:var(--sub);cursor:default">Буде створено нову підкатегорію</div>`;
-        }
-      }
-
-      drop.innerHTML = html;
-
-      // Обробка кліків по опціях
-      if (!isSubcatCustomInput) {
-        drop.querySelectorAll('.desc-opt').forEach(el => {
-          if (el.id === inputId + '-more') {
-            el.addEventListener('mousedown', e => {
-              e.preventDefault();
-              isSubcatCustomInput = true;
-              input.removeAttribute('readonly'); // якщо робили поле readonly за замовчуванням
-              input.value = '';
-              input.focus();
-              openSubcatDropdown(inputId, dropId);
-            });
-          } else if (el.dataset.val) {
-            el.addEventListener('mousedown', e => {
-              e.preventDefault();
-              input.value = el.dataset.val;
-              drop.classList.remove('show');
-            });
-          }
-        });
-      } else {
-        drop.querySelectorAll('.desc-opt').forEach(el => {
-          if (el.dataset.val) {
-            el.addEventListener('mousedown', e => {
-              e.preventDefault();
-              input.value = el.dataset.val;
-              drop.classList.remove('show');
-            });
-          }
-        });
-      }
-
-      drop.classList.add('show');
-    }
-
-    function onSubcatInput(inputId, dropId) {
-      if (!isSubcatCustomInput) return;
-      openSubcatDropdown(inputId, dropId);
-    }
-
-    // Отримати підкатегорії, які використовувалися з конкретною категорією
-    function getSubcatsForCategory(catIdOrName) {
-      if (!catIdOrName) return [];
-      const catName = resolveName('expenseCategories', catIdOrName) || catIdOrName;
-      const set = new Set();
-      allRecords.forEach(r => {
-        if (r._t === 'exp' && r.category && r.category.toLowerCase() === catName.toLowerCase() && r.subcategory) {
-          set.add(r.subcategory);
-        }
-      });
-      return Array.from(set).sort();
-    }
+function onSubcatInput(inputId, dropId) {
+  const input = document.getElementById(inputId), drop = document.getElementById(dropId);
+  const val = input.value.trim().toLowerCase();
+  if (!val) { drop.classList.remove('show'); return; }
+  const items = subcatNames().filter(d => d.toLowerCase().includes(val)).slice(0, 7);
+  if (!items.length) { drop.classList.remove('show'); return; }
+  drop.innerHTML = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
+  drop.querySelectorAll('.desc-opt').forEach(el => {
+    el.addEventListener('mousedown', e => {
+      e.preventDefault();
+      document.getElementById(inputId).value = el.dataset.val;
+      drop.classList.remove('show');
+    });
+  });
+  drop.classList.add('show');
+}
 
     function hideDescDrop(id) { setTimeout(() => document.getElementById(id)?.classList.remove('show'), 200); }
     function pickDesc(inputId, val, dropId) { document.getElementById(inputId).value = val; document.getElementById(dropId).classList.remove('show'); }
