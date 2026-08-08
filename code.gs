@@ -9,28 +9,28 @@ var ALLOWED_USERS = [
   'yyyy@gmail.com'
 ];
 var USER_PREFIX = {
-  'xxxx@gmail.com':  'xx',
+  'xxxx@gmail.com': 'xx',
   'yyyy@gmail.com': 'yy'
 };
 
 // ── Листи ──
 var SH = {
   expenses: 'Витрати',
-  income:   'Доходи',
+  income: 'Доходи',
   business: 'Бізнес',
   settings: 'Settings',
-  monthly:  'Monthly Overview',
-  annual:   'Annual Overview',
-  analyz:   'Аналіз',
-  dMonthInc:  'Diagram Monthly Income',
-  dMonthExp:  'Diagram Monthly Expenses',
-  dMonthSub:  'Diagram Monthly Expenses Subcategory',
-  dAnnBal:    'Diagram Annual Balance',
-  dAnnInc:    'Diagram Annual Income',
-  dAnnExp:    'Diagram Annual Expenses',
-  dAnlInc:    'Diagram Analys Income',
-  dAnlExp:    'Diagram Analys Expenses',
-  dAnlSub:    'Diagram Analys Expenses Subcategory'
+  monthly: 'Monthly Overview',
+  annual: 'Annual Overview',
+  analyz: 'Аналіз',
+  dMonthInc: 'Diagram Monthly Income',
+  dMonthExp: 'Diagram Monthly Expenses',
+  dMonthSub: 'Diagram Monthly Expenses Subcategory',
+  dAnnBal: 'Diagram Annual Balance',
+  dAnnInc: 'Diagram Annual Income',
+  dAnnExp: 'Diagram Annual Expenses',
+  dAnlInc: 'Diagram Analys Income',
+  dAnlExp: 'Diagram Analys Expenses',
+  dAnlSub: 'Diagram Analys Expenses Subcategory'
 };
 
 // ── Структура колонок ──
@@ -40,8 +40,8 @@ var SH = {
 // ── Клітинки фільтрів аналітики ──
 var FC = {
   monthly: { month: 'K4', year: 'K6', category: 'K8' },
-  annual:  { month: 'B16', year: 'B20' },
-  analyz:  { month: 'C5', year: 'F5', category: 'B47' }
+  annual: { month: 'B16', year: 'B20' },
+  analyz: { month: 'C5', year: 'F5', category: 'B47' }
 };
 
 // ══════════════════════════════════════════
@@ -49,28 +49,28 @@ var FC = {
 // ══════════════════════════════════════════
 function doPost(e) {
   try {
-    var data  = JSON.parse(e.postData.contents);
+    var data = JSON.parse(e.postData.contents);
     var email = verifyToken(data._token || '');
-    if (!email)          return respond({ status: 'error', message: 'Невалідний токен' });
+    if (!email) return respond({ status: 'error', message: 'Невалідний токен' });
     if (!isAllowed(email)) return respond({ status: 'error', message: 'Доступ заборонено: ' + email });
 
     var res;
     switch (data.action) {
-      case 'addRecord':         res = addRecord(data, email);     break;
-      case 'resolveRate':       res = resolveRate(data);           break;
-      case 'resolveOfflineRate':res = resolveOfflineRate(data);    break;
-      case 'getRecords':        res = getRecords(data);            break;
-      case 'updateRecord':      res = updateRecord(data);          break;
-      case 'deleteRecord':      res = deleteRecord(data);          break;
-      case 'getSettings':       res = getSettings();               break;
-      case 'whoAmI':            res = { status: 'ok', prefix: getPrefix(email) }; break;
-      case 'getFilters':        res = getFilters();                break;
-      case 'applyFilter':       res = applyFilter(data);           break;
-      case 'getRateSync':       res = getRateSync(data);           break;
+      case 'addRecord': res = addRecord(data, email); break;
+      case 'resolveRate': res = resolveRate(data); break;
+      case 'resolveOfflineRate': res = resolveOfflineRate(data); break;
+      case 'getRecords': res = getRecords(data); break;
+      case 'updateRecord': res = updateRecord(data); break;
+      case 'deleteRecord': res = deleteRecord(data); break;
+      case 'getSettings': res = getSettings(); break;
+      case 'whoAmI': res = { status: 'ok', prefix: getPrefix(email) }; break;
+      case 'getFilters': res = getFilters(); break;
+      case 'applyFilter': res = applyFilter(data); break;
+      case 'getRateSync': res = getRateSync(data); break;
       default: res = { status: 'error', message: 'Unknown action: ' + data.action };
     }
     return respond(res);
-  } catch(err) {
+  } catch (err) {
     return respond({ status: 'error', message: err.toString() });
   }
 }
@@ -79,14 +79,14 @@ function doGet(e) {
   try {
     if (e.parameter.action === 'getSettings') return respond(getSettings());
     return respond({ status: 'error', message: 'Unknown GET action' });
-  } catch(err) {
+  } catch (err) {
     return respond({ status: 'error', message: err.toString() });
   }
 }
 
 function isAllowed(email) {
   var e = (email || '').toLowerCase();
-  return ALLOWED_USERS.some(function(u){ return u.toLowerCase() === e; });
+  return ALLOWED_USERS.some(function (u) { return u.toLowerCase() === e; });
 }
 
 function getPrefix(email) {
@@ -106,17 +106,17 @@ function respond(obj) {
 // 1. ДОДАТИ ЗАПИС
 // ══════════════════════════════════════════
 function addRecord(data, email) {
-  var ss       = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheetKey = data.sheet;
-  var sheet    = ss.getSheetByName(SH[sheetKey]);
+  var sheet = ss.getSheetByName(SH[sheetKey]);
   if (!sheet) return { status: 'error', message: 'Лист не знайдено: ' + SH[sheetKey] };
 
-  var now      = new Date();
-  var uuid     = data.uuid || (getPrefix(email) + '_' + Utilities.getUuid());
+  var now = new Date();
+  var uuid = data.uuid || (getPrefix(email) + '_' + Utilities.getUuid());
   var currency = (data.currency || 'USD').toUpperCase();
-  var amount   = parseFloat(data.amount) || 0;
-  var dateISO  = (data.date || '').substring(0, 10);
-  var row      = getNextRow(sheet);
+  var amount = parseFloat(data.amount) || 0;
+  var dateISO = (data.date || '').substring(0, 10);
+  var row = getNextRow(sheet);
 
   sheet.getRange(row, 1).setValue(uuid);            // A: UUID
   sheet.getRange(row, 2).setValue(now);             // B: Created
@@ -157,7 +157,7 @@ function addRecord(data, email) {
 // 2. ЗАФІКСУВАТИ КУРС (фоновий виклик через 4 сек)
 // ══════════════════════════════════════════
 function resolveRate(data) {
-  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(SH[data.sheet]);
   if (!sheet) return { status: 'error', message: 'Лист не знайдено' };
 
@@ -166,12 +166,12 @@ function resolveRate(data) {
   Utilities.sleep(1000);
 
   var cellJ = sheet.getRange(row, 10);
-  var valJ  = cellJ.getValue();
+  var valJ = cellJ.getValue();
   if (typeof valJ === 'number' && valJ > 0) cellJ.setValue(valJ);
 
   if (data.sheet === 'business') {
     var cellL = sheet.getRange(row, 12);
-    var valL  = cellL.getValue();
+    var valL = cellL.getValue();
     if (typeof valL === 'number' && valL > 0) cellL.setValue(valL);
   }
 
@@ -182,13 +182,13 @@ function resolveRate(data) {
 // 2b. ЗАПОВНИТИ КУРС ДЛЯ ОФЛАЙН-ЗАПИСУ
 // ══════════════════════════════════════════
 function resolveOfflineRate(data) {
-  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(SH[data.sheet]);
   if (!sheet) return { status: 'error', message: 'Лист не знайдено' };
 
-  var row      = parseInt(data.row);
+  var row = parseInt(data.row);
   var currency = (data.currency || 'USD').toUpperCase();
-  var dateISO  = (data.date || '').substring(0, 10);
+  var dateISO = (data.date || '').substring(0, 10);
 
   if (currency === 'USD') {
     sheet.getRange(row, 10).setValue(1);
@@ -208,12 +208,12 @@ function resolveOfflineRate(data) {
   Utilities.sleep(1000);
 
   var cellJ = sheet.getRange(row, 10);
-  var valJ  = cellJ.getValue();
+  var valJ = cellJ.getValue();
   if (typeof valJ === 'number' && valJ > 0) cellJ.setValue(valJ);
 
   if (data.sheet === 'business') {
     var cellL = sheet.getRange(row, 12);
-    var valL  = cellL.getValue();
+    var valL = cellL.getValue();
     if (typeof valL === 'number' && valL > 0) cellL.setValue(valL);
   }
 
@@ -224,7 +224,7 @@ function resolveOfflineRate(data) {
 // 3. ОТРИМАТИ ЗАПИСИ
 // ══════════════════════════════════════════
 function getRecords(data) {
-  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(SH[data.sheet]);
   if (!sheet) return { status: 'error', message: 'Лист не знайдено' };
 
@@ -232,10 +232,10 @@ function getRecords(data) {
   if (lastRow < 2) return { status: 'ok', records: [] };
 
   var numCols = data.sheet === 'business' ? 13 : 11;
-  var values  = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
+  var values = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
   var records = [];
 
-  values.forEach(function(row, i) {
+  values.forEach(function (row, i) {
     if (row[3] === 'DELETED') return;  // D
     if (!row[4] && !row[6]) return;    // E, G
 
@@ -250,18 +250,18 @@ function getRecords(data) {
       : '';
 
     records.push({
-      row:      i + 2,
-      uuid:     row[0] || '',
-      created:  createdStr,
-      date:     dateStr,
+      row: i + 2,
+      uuid: row[0] || '',
+      created: createdStr,
+      date: dateStr,
       category: row[5] || '',
-      amount:   row[6] || 0,
-      desc:     row[7] || '',
+      amount: row[6] || 0,
+      desc: row[7] || '',
       currency: row[8] || '',
-      rateUSD:  row[9] || 0,
-      usd:      row[10] || 0,   // K: базова валюта (USD) — для коректних підсумків
-      rateUAH:  data.sheet === 'business' ? (row[11] || 0) : null,
-      uah:      data.sheet === 'business' ? (row[12] || 0) : null  // M
+      rateUSD: row[9] || 0,
+      usd: row[10] || 0,   // K: базова валюта (USD) — для коректних підсумків
+      rateUAH: data.sheet === 'business' ? (row[11] || 0) : null,
+      uah: data.sheet === 'business' ? (row[12] || 0) : null  // M
     });
   });
 
@@ -273,13 +273,13 @@ function getRecords(data) {
 // 4. РЕДАГУВАТИ ЗАПИС
 // ══════════════════════════════════════════
 function updateRecord(data) {
-  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(SH[data.sheet]);
   if (!sheet) return { status: 'error', message: 'Лист не знайдено' };
 
-  var row      = parseInt(data.row);
+  var row = parseInt(data.row);
   var currency = (data.currency || 'USD').toUpperCase();
-  var dateISO  = (data.date || '').substring(0, 10);
+  var dateISO = (data.date || '').substring(0, 10);
 
   sheet.getRange(row, 3).setValue(new Date());             // C: Updated
   sheet.getRange(row, 5).setValue(formatDate(dateISO));    // E: Дата
@@ -321,7 +321,7 @@ function updateRecord(data) {
 // 5. М'ЯКЕ ВИДАЛЕННЯ
 // ══════════════════════════════════════════
 function deleteRecord(data) {
-  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(SH[data.sheet]);
   if (!sheet) return { status: 'error', message: 'Лист не знайдено' };
   var row = parseInt(data.row);
@@ -337,7 +337,7 @@ function deleteRecord(data) {
 //           J=БізCatsFreq K=БізDescs M=Months N=SchemaVersion
 // ══════════════════════════════════════════
 function getSettings() {
-  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(SH.settings);
   if (!sheet) return { status: 'error', message: 'Settings не знайдено' };
 
@@ -345,23 +345,23 @@ function getSettings() {
 
   function col(c) {
     return sheet.getRange(2, c, n - 1, 1).getValues()
-      .map(function(r){ return r[0]; }).filter(Boolean);
+      .map(function (r) { return r[0]; }).filter(Boolean);
   }
 
   return {
-    status:             'ok',
-    expenseCategories:  col(6),   // F
-    expenseDescs:       col(7),   // G
-    incomeCategories:   col(8),   // H
-    incomeDescs:        col(9),   // I
+    status: 'ok',
+    expenseCategories: col(6),   // F
+    expenseDescs: col(7),   // G
+    incomeCategories: col(8),   // H
+    incomeDescs: col(9),   // I
     businessCategories: col(10),  // J
-    businessDescs:      col(11),  // K
-    currencies:         col(4),   // D
-    mainCurrency:       sheet.getRange(2, 5).getValue() || 'USD',
-    months:             col(13),  // M
+    businessDescs: col(11),  // K
+    currencies: col(4),   // D
+    mainCurrency: sheet.getRange(2, 5).getValue() || 'USD',
+    months: col(13),  // M
     expenseSubcategories: col(15), // O
     expenseCategoriesOrder: col(1), // A — фіксований порядок (для діаграм)
-    incomeCategoriesOrder:  col(2), // B — фіксований порядок (для діаграм)
+    incomeCategoriesOrder: col(2), // B — фіксований порядок (для діаграм)
   };
 }
 
@@ -379,17 +379,17 @@ function getFilters() {
   return {
     status: 'ok',
     monthly: {
-      month:    v(SH.monthly, FC.monthly.month),
-      year:     v(SH.monthly, FC.monthly.year),
+      month: v(SH.monthly, FC.monthly.month),
+      year: v(SH.monthly, FC.monthly.year),
       category: v(SH.monthly, FC.monthly.category)
     },
     annual: {
       month: v(SH.annual, FC.annual.month),
-      year:  v(SH.annual, FC.annual.year)
+      year: v(SH.annual, FC.annual.year)
     },
     analyz: {
-      month:    v(SH.analyz, FC.analyz.month),
-      year:     v(SH.analyz, FC.analyz.year),
+      month: v(SH.analyz, FC.analyz.month),
+      year: v(SH.analyz, FC.analyz.year),
       category: v(SH.analyz, FC.analyz.category)
     }
   };
@@ -400,11 +400,11 @@ function getFilters() {
 // (один виклик = запис фільтру + flush + читання даних)
 // ══════════════════════════════════════════
 function applyFilter(data) {
-  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(data.sheetName);
   if (!sheet) return { status: 'error', message: 'Лист не знайдено: ' + data.sheetName };
 
-  (data.cells || []).forEach(function(item) {
+  (data.cells || []).forEach(function (item) {
     sheet.getRange(item.cell).setValue(item.value);
   });
 
@@ -419,7 +419,7 @@ function applyFilter(data) {
 // ══════════════════════════════════════════
 function getDiagrams(data) {
   var tab = data.tab;
-  var ss  = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
 
   function read(name) {
     var s = ss.getSheetByName(name);
@@ -429,30 +429,30 @@ function getDiagrams(data) {
     if (lr < 1 || lc < 1) return { headers: [], rows: [] };
     var vals = s.getRange(1, 1, lr, lc).getValues();
     return {
-      headers: vals[0].map(function(h){ return h !== '' ? String(h) : ''; }),
-      rows:    vals.slice(1).filter(function(r){ return r[0] !== ''; })
+      headers: vals[0].map(function (h) { return h !== '' ? String(h) : ''; }),
+      rows: vals.slice(1).filter(function (r) { return r[0] !== ''; })
     };
   }
 
   if (tab === 'monthly') return {
-    status:   'ok',
-    income:   read(SH.dMonthInc),
+    status: 'ok',
+    income: read(SH.dMonthInc),
     expenses: read(SH.dMonthExp),
-    subcat:   read(SH.dMonthSub)
+    subcat: read(SH.dMonthSub)
   };
 
   if (tab === 'annual') return {
-    status:   'ok',
-    balance:  read(SH.dAnnBal),
-    income:   read(SH.dAnnInc),
+    status: 'ok',
+    balance: read(SH.dAnnBal),
+    income: read(SH.dAnnInc),
     expenses: read(SH.dAnnExp)
   };
 
   if (tab === 'analyz') return {
-    status:   'ok',
-    income:   read(SH.dAnlInc),
+    status: 'ok',
+    income: read(SH.dAnlInc),
     expenses: read(SH.dAnlExp),
-    subcat:   read(SH.dAnlSub)
+    subcat: read(SH.dAnlSub)
   };
 
   return { status: 'error', message: 'Unknown tab: ' + tab };
@@ -475,15 +475,15 @@ function gfFormula(from, to, dateISO) {
   // Отримуємо сьогоднішню дату у форматі YYYY-MM-DD (за місцевим часом)
   var today = new Date();
   var todayISO = today.getFullYear() + '-' +
-                 String(today.getMonth() + 1).padStart(2, '0') + '-' +
-                 String(today.getDate()).padStart(2, '0');
+    String(today.getMonth() + 1).padStart(2, '0') + '-' +
+    String(today.getDate()).padStart(2, '0');
 
   // 1. Якщо запитувана дата — це СЬОГОДНІ:
   if (dateISO === todayISO) {
     // Намагаємося взяти "живий" курс без дат.
     // Якщо ринок закритий або помилка — беремо останню історію за 9 днів.
     return '=IFERROR(GOOGLEFINANCE("CURRENCY:' + from + to + '"); ' +
-           'INDEX(SORT(GOOGLEFINANCE("CURRENCY:' + from + to + '";"close";DATEVALUE("' + dateISO + '")-9;"' + dateISO + '");1;FALSE);2;2))';
+      'INDEX(SORT(GOOGLEFINANCE("CURRENCY:' + from + to + '";"close";DATEVALUE("' + dateISO + '")-9;"' + dateISO + '");1;FALSE);2;2))';
   }
 
   // 2. Якщо це будь-яка МИНУЛА дата:
@@ -497,14 +497,14 @@ function gfFormula(from, to, dateISO) {
 // СИНХРОННИЙ КУРС — для Firebase (не пише в реальні листи)
 // ══════════════════════════════════════════
 function getRateSync(data) {
-  var ss    = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName('RateScratch');
   if (!sheet) return { status: 'error', message: 'Лист RateScratch не знайдено' };
 
   var currency = (data.currency || 'USD').toUpperCase();
-  var toCur    = data.to || 'USD';
-  var dateISO  = (data.date || '').substring(0, 10);
-  var cell     = sheet.getRange('A1');
+  var toCur = data.to || 'USD';
+  var dateISO = (data.date || '').substring(0, 10);
+  var cell = sheet.getRange('A1');
 
   if (currency === toCur) return { status: 'ok', rate: 1 };
 
@@ -526,7 +526,7 @@ function formatDate(iso) {
 function verifyToken(token) {
   try {
     if (!token) return null;
-    var parts  = token.split('.');
+    var parts = token.split('.');
     if (parts.length < 2) return null;
     var padded = parts[1].replace(/-/g, '+').replace(/_/g, '/');
     while (padded.length % 4) padded += '=';
@@ -536,7 +536,7 @@ function verifyToken(token) {
     var now = Math.floor(Date.now() / 1000);
     if (payload.exp && payload.exp < now) return null;
     return payload.email || null;
-  } catch(e) {
+  } catch (e) {
     Logger.log('Token error: ' + e);
     return null;
   }
@@ -555,23 +555,23 @@ function importDictionariesToFirestore() {
   var values = sheet.getRange(1, 1, lastRow, 5).getValues(); // A:E
 
   var typeMap = {
-    'Категорія витрат':    { doc: 'expenseCategories',    prefix: 'ExCat' },
-    'Категорія доходів':   { doc: 'incomeCategories',     prefix: 'InCat' },
-    'Категорія бізнесу':   { doc: 'businessCategories',   prefix: 'BzCat' },
-    'Опис витрат':         { doc: 'expenseDescriptions',  prefix: 'ExDsc' },
-    'Опис доходів':        { doc: 'incomeDescriptions',   prefix: 'InDsc' },
-    'Опис бізнесу':        { doc: 'BusinessDescriptions',   prefix: 'BzDsc' },    
+    'Категорія витрат': { doc: 'expenseCategories', prefix: 'ExCat' },
+    'Категорія доходів': { doc: 'incomeCategories', prefix: 'InCat' },
+    'Категорія бізнесу': { doc: 'businessCategories', prefix: 'BzCat' },
+    'Опис витрат': { doc: 'expenseDescriptions', prefix: 'ExDsc' },
+    'Опис доходів': { doc: 'incomeDescriptions', prefix: 'InDsc' },
+    'Опис бізнесу': { doc: 'BusinessDescriptions', prefix: 'BzDsc' },
     'Підкатегорія витрат': { doc: 'expenseSubcategories', prefix: 'ExSub' }
   };
 
   var collected = {};
-  var counters  = {};
-  var months    = [];
+  var counters = {};
+  var months = [];
 
   // ── Валюти обробляємо окремо: дедуплікація за кодом (USD/UAH/...) ──
   var currencyCodeToId = {}; // "USD" -> "Cur01"
-  var currencyCounter   = 0;
-  var baseCode  = 'USD';
+  var currencyCounter = 0;
+  var baseCode = 'USD';
   var localCode = 'UAH';
 
   function getOrCreateCurrencyId(code) {
@@ -582,7 +582,7 @@ function importDictionariesToFirestore() {
     return id;
   }
 
-  values.forEach(function(row) {
+  values.forEach(function (row) {
     var id = row[0], type = row[1], name = row[2];
     var monthNo = row[3], monthName = row[4];
 
@@ -597,7 +597,7 @@ function importDictionariesToFirestore() {
       getOrCreateCurrencyId(name);
       return;
     }
-    if (type === 'Базова валюта')   { baseCode  = name; getOrCreateCurrencyId(name); return; }
+    if (type === 'Базова валюта') { baseCode = name; getOrCreateCurrencyId(name); return; }
     if (type === 'Локальна валюта') { localCode = name; getOrCreateCurrencyId(name); return; }
 
     if (!id) return;
@@ -613,16 +613,16 @@ function importDictionariesToFirestore() {
 
   // ── Формуємо документ currencies: Cur01:"USD", ..., base:"USD", local:"UAH" ──
   var currenciesDoc = {};
-  Object.keys(currencyCodeToId).forEach(function(code) {
+  Object.keys(currencyCodeToId).forEach(function (code) {
     currenciesDoc[currencyCodeToId[code]] = code;
   });
-  currenciesDoc.baseCurrency  = baseCode;
+  currenciesDoc.baseCurrency = baseCode;
   currenciesDoc.localCurrency = localCode;
   collected['currencies'] = currenciesDoc;
   counters['Cur'] = currencyCounter;
 
   // ── Записуємо всі довідники ──
-  Object.keys(collected).forEach(function(docName) {
+  Object.keys(collected).forEach(function (docName) {
     firestorePatchDoc_('dictionaries/' + docName, collected[docName], PROJECT_ID, token);
   });
 
@@ -637,10 +637,10 @@ function importDictionariesToFirestore() {
 
 function firestorePatchDoc_(path, obj, projectId, token) {
   var fields = {};
-  Object.keys(obj).forEach(function(key) {
+  Object.keys(obj).forEach(function (key) {
     var val = obj[key];
     if (Array.isArray(val)) {
-      fields[key] = { arrayValue: { values: val.map(function(v) { return { stringValue: String(v) }; }) } };
+      fields[key] = { arrayValue: { values: val.map(function (v) { return { stringValue: String(v) }; }) } };
     } else if (typeof val === 'number') {
       fields[key] = { integerValue: val };
     } else {
@@ -675,20 +675,20 @@ function exportRecordsToFirestore() {
   // 1. Спочатку очищаємо три колекції у Firestore
   var collectionsToClear = ['expenses', 'income', 'business'];
   Logger.log('--- Початок очищення колекцій ---');
-  collectionsToClear.forEach(function(collectionName) {
+  collectionsToClear.forEach(function (collectionName) {
     clearCollection_(collectionName, PROJECT_ID, token);
   });
   Logger.log('--- Очищення завершено. Початок експорту ---');
 
   // 2. Завантажуємо довідники з Firestore, будуємо зворотній пошук
-  var expCatMap = buildReverseMap_(getFirestoreDoc_('dictionaries/expenseCategories',   PROJECT_ID, token));
-  var incCatMap = buildReverseMap_(getFirestoreDoc_('dictionaries/incomeCategories',    PROJECT_ID, token));
-  var bizCatMap = buildReverseMap_(getFirestoreDoc_('dictionaries/businessCategories',  PROJECT_ID, token));
+  var expCatMap = buildReverseMap_(getFirestoreDoc_('dictionaries/expenseCategories', PROJECT_ID, token));
+  var incCatMap = buildReverseMap_(getFirestoreDoc_('dictionaries/incomeCategories', PROJECT_ID, token));
+  var bizCatMap = buildReverseMap_(getFirestoreDoc_('dictionaries/businessCategories', PROJECT_ID, token));
   var expDscMap = buildReverseMap_(getFirestoreDoc_('dictionaries/expenseDescriptions', PROJECT_ID, token));
-  var incDscMap = buildReverseMap_(getFirestoreDoc_('dictionaries/incomeDescriptions',  PROJECT_ID, token));
+  var incDscMap = buildReverseMap_(getFirestoreDoc_('dictionaries/incomeDescriptions', PROJECT_ID, token));
   var bizDscMap = buildReverseMap_(getFirestoreDoc_('dictionaries/businessDescriptions', PROJECT_ID, token));
   var expSubMap = buildReverseMap_(getFirestoreDoc_('dictionaries/expenseSubcategories', PROJECT_ID, token));
-  var curMap    = buildCurrencyReverseMap_(getFirestoreDoc_('dictionaries/currencies',   PROJECT_ID, token));
+  var curMap = buildCurrencyReverseMap_(getFirestoreDoc_('dictionaries/currencies', PROJECT_ID, token));
 
   var unmatched = [];
 
@@ -748,7 +748,7 @@ function clearCollection_(collection, projectId, token) {
     if (docs.length === 0) break;
 
     // Формуємо масив видалень для одного пакетного POST-запиту (:commit)
-    var writes = docs.map(function(doc) {
+    var writes = docs.map(function (doc) {
       return { delete: doc.name };
     });
 
@@ -786,7 +786,7 @@ function exportSheet_(cfg, projectId, token, unmatched) {
   var values = sheet.getRange(2, 1, lastRow - 1, cfg.numCols).getValues();
   var requests = [];
 
-  values.forEach(function(row) {
+  values.forEach(function (row) {
     if (row[3] === 'DELETED') return;
     if (!row[4] && !row[6]) return;
 
@@ -796,15 +796,15 @@ function exportSheet_(cfg, projectId, token, unmatched) {
       : '';
 
     var catText = String(row[5] || '').trim();
-    var catId   = catMapLookup_(cfg.catMap, catText);
+    var catId = catMapLookup_(cfg.catMap, catText);
     if (catText && !catId) unmatched.push({ sheet: cfg.sheetName, type: 'category', text: catText });
 
     var dscText = String(row[7] || '').trim();
-    var dscId   = catMapLookup_(cfg.dscMap, dscText);
+    var dscId = catMapLookup_(cfg.dscMap, dscText);
     if (dscText && !dscId) unmatched.push({ sheet: cfg.sheetName, type: 'desc', text: dscText });
 
     var curText = String(row[8] || '').trim();
-    var curId   = catMapLookup_(cfg.curMap, curText);
+    var curId = catMapLookup_(cfg.curMap, curText);
     if (curText && !curId) unmatched.push({ sheet: cfg.sheetName, type: 'currency', text: curText });
 
     var subId = '';
@@ -816,25 +816,25 @@ function exportSheet_(cfg, projectId, token, unmatched) {
 
     var doc = {
       fields: {
-        categoryId:    { stringValue: catId },
+        categoryId: { stringValue: catId },
         subcategoryId: { stringValue: subId },
-        amount:        { doubleValue: row[6] || 0 },
-        descId:        { stringValue: dscId },
-        currencyId:    { stringValue: curId },
-        currency:      { stringValue: curText },
-        rateUSD:       { doubleValue: row[9] || 1 },
-        amountUSD:     { doubleValue: row[10] || 0 },
-        date:          { stringValue: dateStr },
-        author:        { stringValue: 'xxxx@gmail.com' },
-        status:        { stringValue: 'ACTIVE' },
-        createdAt:     { timestampValue: toFirestoreTimestamp_(row[1], dateStr) },
-        updatedAt:     { timestampValue: toFirestoreTimestamp_(row[2], dateStr) },
-        imported:      { booleanValue: true }
+        amount: { doubleValue: row[6] || 0 },
+        descId: { stringValue: dscId },
+        currencyId: { stringValue: curId },
+        currency: { stringValue: curText },
+        rateUSD: { doubleValue: row[9] || 1 },
+        amountUSD: { doubleValue: row[10] || 0 },
+        date: { stringValue: dateStr },
+        author: { stringValue: 'xxxx@gmail.com' },
+        status: { stringValue: 'ACTIVE' },
+        createdAt: { timestampValue: toFirestoreTimestamp_(row[1], dateStr) },
+        updatedAt: { timestampValue: toFirestoreTimestamp_(row[2], dateStr) },
+        imported: { booleanValue: true }
       }
     };
 
     if (cfg.isBusiness) {
-      doc.fields.rateUAH   = { doubleValue: row[11] || 1 };
+      doc.fields.rateUAH = { doubleValue: row[11] || 1 };
       doc.fields.amountUAH = { doubleValue: row[12] || 0 };
     }
 
@@ -858,7 +858,7 @@ function exportSheet_(cfg, projectId, token, unmatched) {
     var chunk = requests.slice(i, i + BATCH_SIZE);
     var responses = UrlFetchApp.fetchAll(chunk);
 
-    responses.forEach(function(resp) {
+    responses.forEach(function (resp) {
       if (resp.getResponseCode() === 200) {
         count++;
       } else {
@@ -888,7 +888,7 @@ function toFirestoreTimestamp_(dateVal, fallbackDateStr) {
 
 function buildCurrencyReverseMap_(dict) {
   var map = {};
-  Object.keys(dict).forEach(function(key) {
+  Object.keys(dict).forEach(function (key) {
     if (key.indexOf('Cur') !== 0) return;
     var code = dict[key];
     if (typeof code === 'string') map[code.toLowerCase()] = key;
@@ -911,7 +911,7 @@ function getFirestoreDoc_(path, projectId, token) {
   var json = JSON.parse(resp.getContentText());
   var result = {};
   var fields = json.fields || {};
-  Object.keys(fields).forEach(function(key) {
+  Object.keys(fields).forEach(function (key) {
     var f = fields[key];
     if (f.stringValue !== undefined) result[key] = f.stringValue;
   });
@@ -921,7 +921,7 @@ function getFirestoreDoc_(path, projectId, token) {
 // ── { "ExCat00001": "Житло" } → { "житло": "ExCat00001" } (для пошуку за назвою) ──
 function buildReverseMap_(dict) {
   var map = {};
-  Object.keys(dict).forEach(function(id) {
+  Object.keys(dict).forEach(function (id) {
     var name = dict[id];
     if (typeof name === 'string') map[name.toLowerCase()] = id;
   });
@@ -931,7 +931,7 @@ function buildReverseMap_(dict) {
 function fixCurrencyCounter() {
   var PROJECT_ID = 'expensesa';
   var token = ScriptApp.getOAuthToken();
-  firestorePatchDoc_('dictionaries/counters', { BzCat: 3, BzDsc: 2, Cur: 5, ExCat: 11, ExSub: 18, ExDsc: 44, InCat: 7, InDsc: 2}, PROJECT_ID, token);
+  firestorePatchDoc_('dictionaries/counters', { BzCat: 3, BzDsc: 2, Cur: 5, ExCat: 11, ExSub: 18, ExDsc: 44, InCat: 7, InDsc: 2 }, PROJECT_ID, token);
   Logger.log('Готово');
 }
 
@@ -954,13 +954,13 @@ function formatFirestoreTimestamp(val, fallbackDate) {
       d = new Date(fallbackDate);
     } else if (typeof fallbackDate === 'string' && fallbackDate.trim() !== '') {
       var cleanStr = fallbackDate.trim().substring(0, 10);
-      
+
       // Обробка формату DD.MM.YYYY
       if (cleanStr.includes('.')) {
         var parts = cleanStr.split('.'); // ['DD', 'MM', 'YYYY']
         cleanStr = parts[2] + '-' + parts[1] + '-' + parts[0]; // 'YYYY-MM-DD'
       }
-      
+
       d = new Date(cleanStr + 'T12:00:00Z');
     }
 
@@ -983,5 +983,5 @@ function testAdd() {
   }, 'test@gmail.com')));
 }
 function testSettings() { Logger.log(JSON.stringify(getSettings())); }
-function testFilters()  { Logger.log(JSON.stringify(getFilters())); }
+function testFilters() { Logger.log(JSON.stringify(getFilters())); }
 function testDiagrams() { Logger.log(JSON.stringify(getDiagrams({ tab: 'monthly' }))); }
