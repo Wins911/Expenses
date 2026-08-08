@@ -1302,7 +1302,7 @@
         </div>
 
         <label class="lbl">Опис<span
-              style="color:var(--sub);font-weight:400;text-transform:none;letter-spacing:0">(необов'язково)</span></label>
+            style="color:var(--sub);font-weight:400;text-transform:none;letter-spacing:0">(необов'язково)</span></label>
         <div class="desc-wrap">
           <input type="text" id="eDesc" autocomplete="off" oninput="onDescInput('eDesc','eDescDrop')"
             onblur="hideDescDrop('eDescDrop')" />
@@ -1341,6 +1341,9 @@
     firebase.initializeApp(firebaseConfig);
     const fbAuth = firebase.auth();
     const fbDb = firebase.firestore();
+    fbDb.enablePersistence({ synchronizeTabs: true }).catch(err => {
+      console.warn("Помилка підключення офлайн-кешу Firestore:", err.code);
+    });
 
     // ── Крок 2: реальний вхід через Firebase Auth ──
     function firebaseLogin() {
@@ -1794,6 +1797,7 @@
 
       const btn = document.getElementById('saveBtn');
       btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Збереження…';
+      if (!navigator.onLine) { offlineQueue.push(payload); saveQueue(); showToast('⚡ Збережено офлайн', 'info'); afterSave(btn); return; }
 
       try {
         // ── Резолвимо/створюємо ID для валюти, опису, підкатегорії ──
@@ -1876,6 +1880,20 @@
       showToast(ok ? `✓ Синхронізовано: ${ok}${failed.length ? ', помилок: ' + failed.length : ''}` : 'Помилка', 'ok');
     }
     function updateOfflineBar() { document.getElementById('offlineBar').classList.toggle('show', !navigator.onLine); }
+
+    window.addEventListener('online', () => {
+  updateOfflineBar();
+  if (offlineQueue.length > 0) {
+    // Firestore вже сам відправляє дані у фоні,
+    // ми просто показуємо повідомлення і скидаємо лічильник
+    showToast('⚡ Мережу відновлено. Синхронізація...', 'info');
+    setTimeout(() => {
+      offlineQueue = [];
+      saveQueue();
+      showToast('✓ Всі дані синхронізовано', 'ok');
+    }, 2000);
+  }
+});
 
     // ── Records ──
     async function loadRecords() {
