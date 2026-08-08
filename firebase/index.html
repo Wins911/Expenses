@@ -1589,14 +1589,19 @@
       document.querySelectorAll('#addTabs .tab').forEach(el => el.classList.toggle('active', el.dataset.t === t));
       const btn = document.getElementById('saveBtn');
       btn.className = 'save-btn ' + TAB_CFG[t].cls; btn.textContent = TAB_CFG[t].label;
-      buildSel('fCat', cats(t)); updateSubcatVisibility(); document.getElementById('fCat').onchange = updateSubcatVisibility; updateRateBadge();
+      buildSel('fCat', cats(t)); updateSubcatVisibility(); document.getElementById('fCat').onchange = onAddCatChange; updateRateBadge();
     }
     function buildSel(id, items, selId = '') {
-      document.getElementById(id).innerHTML = items.map(c => `<option value="${x(c.id)}"${c.id === selId ? ' selected' : ''}>${x(c.name)}</option>`).join('');
+      document.getElementById(id).innerHTML = items.map(c => `<option value="${x(c.id)}"${(c.id === selId || c.name === selId) ? ' selected' : ''}>${x(c.name)}</option>`).join('');
     }
     function updateSubcatVisibility() {
       document.getElementById('subcatField').style.display = addTab === 'exp' ? '' : 'none';
       resetSubcatField();
+    }
+    function onAddCatChange() {
+      resetSubcatField();
+      hideDescDrop('fSubcatDrop');
+      hideDescDrop('fDescDrop');
     }
     function setToday() { document.getElementById('fDate').value = new Date().toISOString().split('T')[0]; updateRateBadge(); }
     function updateRateBadge() {
@@ -1696,8 +1701,10 @@
       if (!subcatFreeText) return;
       const input = document.getElementById(inputId), drop = document.getElementById(dropId);
       const val = input.value.trim().toLowerCase();
-      if (!val) { drop.classList.remove('show'); return; }
-      const items = subcatNames().filter(d => d.toLowerCase().includes(val)).slice(0, 7);
+      const catId = document.getElementById('fCat').value;
+      const catName = resolveName('expenseCategories', catId) || catId;
+      const known = [...new Set(allRecords.filter(r => r._t === 'exp' && r.category === catName && r.subcategory).map(r => r.subcategory))];
+      const items = known.filter(d => d.toLowerCase().includes(val)).slice(0, 7);
       if (!items.length) { drop.classList.remove('show'); return; }
       drop.innerHTML = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
       drop.querySelectorAll('.desc-opt').forEach(el => {
@@ -1752,8 +1759,10 @@
       if (!eSubcatFreeText) return;
       const input = document.getElementById(inputId), drop = document.getElementById(dropId);
       const val = input.value.trim().toLowerCase();
-      if (!val) { drop.classList.remove('show'); return; }
-      const items = subcatNames().filter(d => d.toLowerCase().includes(val)).slice(0, 7);
+      const catId = document.getElementById('eCat').value;
+      const catName = resolveName('expenseCategories', catId) || catId;
+      const known = [...new Set(allRecords.filter(r => r._t === 'exp' && r.category === catName && r.subcategory).map(r => r.subcategory))];
+      const items = known.filter(d => d.toLowerCase().includes(val)).slice(0, 7);
       if (!items.length) { drop.classList.remove('show'); return; }
       drop.innerHTML = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
       drop.querySelectorAll('.desc-opt').forEach(el => {
@@ -1998,6 +2007,14 @@
       document.getElementById('eDate').value = rec.date.split('.').reverse().join('-');
       document.getElementById('eAmt').value = rec.amount;
       buildSel('eCat', cats(rec._t), rec.category);
+      const eCatEl = document.getElementById('eCat');
+      if (eCatEl) eCatEl.onchange = () => {
+        const subInput = document.getElementById('eSubcat');
+        if (subInput) subInput.value = '';
+        resetSubcatFieldEdit();
+        hideDescDrop('eSubcatDrop');
+        hideDescDrop('eDescDrop');
+      };
       const curs = getCurs();
       const eCur = document.getElementById('eCur');
       const eCurOther = document.getElementById('eCurOther');
