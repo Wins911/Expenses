@@ -1664,30 +1664,20 @@
 
     // ── Desc Autocomplete ──
     function onDescInput(inputId, dropId) {
-      const input = document.getElementById(inputId), drop = document.getElementById(dropId);
-      const val = input.value.trim().toLowerCase();
-      const t = inputId === 'fDesc' ? addTab : (editRec?._t || addTab);
-      if (!val) { drop.classList.remove('show'); return; }
+  const input = document.getElementById(inputId), drop = document.getElementById(dropId);
+  const val = input.value.trim().toLowerCase();
+  const t = inputId === 'fDesc' ? addTab : (editRec?._t || addTab);
+  if (!val) { drop.classList.remove('show'); return; }
 
-      const catSelectId = inputId === 'fDesc' ? 'fCat' : 'eCat';
-      const catId = document.getElementById(catSelectId)?.value || '';
-      const catDictName = t === 'exp' ? 'expenseCategories' : t === 'inc' ? 'incomeCategories' : 'businessCategories';
-      const catName = resolveName(catDictName, catId) || catId;
+  const catSelectId = inputId === 'fDesc' ? 'fCat' : 'eCat';
+  const catId = document.getElementById(catSelectId)?.value || '';
+  const mapDictName = t === 'exp' ? 'expenseCategoryDescriptions' : t === 'inc' ? 'incomeCategoryDescriptions' : 'businessCategoryDescriptions';
+  const dscDictName = t === 'exp' ? 'expenseDescriptions' : t === 'inc' ? 'incomeDescriptions' : 'businessDescriptions';
 
-      const known = [...new Set(allRecords.filter(r => r._t === t && r.category === catName && r.desc).map(r => r.desc))];
-      const items = known.filter(d => d.toLowerCase().includes(val)).slice(0, 7);
-      if (!items.length) { drop.classList.remove('show'); return; }
-      // data-val замість вбудованого JS-рядка — уникає поламки HTML лапками в описі
-      drop.innerHTML = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
-      drop.querySelectorAll('.desc-opt').forEach(el => {
-        el.addEventListener('mousedown', e => {
-          e.preventDefault();
-          document.getElementById(inputId).value = el.dataset.val;
-          drop.classList.remove('show');
-        });
-      });
-      drop.classList.add('show');
-    }
+  const descIds = dictionaries[mapDictName]?.[catId] || [];
+  const known = descIds.map(id => resolveName(dscDictName, id));
+  const items = known.filter(d => d.toLowerCase().includes(val)).slice(0, 7);
+  if (!items.length) { drop.classList.remove('show'); return; }
     // ── Subcat Autocomplete ──
     let subcatFreeText = false;
 
