@@ -1700,7 +1700,7 @@
   const known = subIds.map(id => resolveName('expenseSubcategories', id));
 
   let html = known.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
-  if (subIds.length < 5) {
+  if (subIds.length < 4) {
     html += `<div class="desc-opt" data-other="1" style="color:var(--acc);font-weight:600">… Інша (ввести текст)</div>`;
   }
   drop.innerHTML = html;
