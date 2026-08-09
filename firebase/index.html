@@ -1115,7 +1115,8 @@
     <header>
       <div class="h-title">💰 Бюджет</div>
       <div class="h-right">
-        <div class="sync-btn" id="syncBtn" onclick="syncOffline()">🔄<span class="sync-cnt" id="syncCnt"></span></div>
+        <div class="sync-btn" id="syncBtn" onclick="syncOffline(); resolvePendingRates()">🔄<span class="sync-cnt"
+            id="syncCnt"></span></div>
         <div class="h-user" id="userBadge"></div>
       </div>
     </header>
@@ -1302,7 +1303,7 @@
         </div>
 
         <label class="lbl">Опис<span
-              style="color:var(--sub);font-weight:400;text-transform:none;letter-spacing:0">(необов'язково)</span></label>
+            style="color:var(--sub);font-weight:400;text-transform:none;letter-spacing:0">(необов'язково)</span></label>
         <div class="desc-wrap">
           <input type="text" id="eDesc" autocomplete="off" oninput="onDescInput('eDesc','eDescDrop')"
             onblur="hideDescDrop('eDescDrop')" />
@@ -1326,7 +1327,7 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwFedQVUXYTt0MVvVREBHFjtqX3jynatG22kzkN0uVU5Uz0x6Z23oDTbB6VXrjSxOQ40g/exec';
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwwbeh9N-l-ujmgr9CIWVkoi0Y80uKsfJIfwo8h5Uvo1nPF2OcWJYHemWQd8Yz4JH3m6Q/exec';
     const GOOGLE_CLIENT_ID = '647272988527-nuhp8d8iut2t4u7384e41cm1bejn8m38.apps.googleusercontent.com';
 
     // ── Firebase (крок 1 — лише підключення й перевірка, дані поки в Sheets) ──
@@ -1341,6 +1342,12 @@
     firebase.initializeApp(firebaseConfig);
     const fbAuth = firebase.auth();
     const fbDb = firebase.firestore();
+
+    fbDb.enablePersistence({ synchronizeTabs: true }).catch(err => {
+      console.warn('Firestore offline persistence не увімкнено:', err.code);
+      // failed-precondition — відкрито в кількох вкладках без synchronizeTabs (не критично)
+      // unimplemented — старий браузер без підтримки (не критично)
+    });
 
     // ── Крок 2: реальний вхід через Firebase Auth ──
     function firebaseLogin() {
@@ -1382,6 +1389,11 @@
     let accessToken = '', userEmail = '', settings = null;
     let addTab = 'exp', anTab = 'monthly', rFilter = 'all', selectedCur = 'UAH';
     let allRecords = [], editRec = null, offlineQueue = JSON.parse(localStorage.getItem('offlineQ') || '[]');
+    let pendingRates = JSON.parse(localStorage.getItem('pendingRates') || '[]');
+    function savePendingRates() {
+      localStorage.setItem('pendingRates', JSON.stringify(pendingRates));
+      updateSyncBadge();
+    }
     let anFilters = {}, charts = {}, curSlide = 0, lpTimer = null;
     let expandedMonths = new Set();
     let cubeTipTimer = null;
@@ -1491,7 +1503,7 @@
       // Note: no auto_select / no prompt() — these can cause repeated silent
       // re-authentication loops (and page "flicker") when the same Google
       // account is signed in on multiple devices at once. Login is manual only.
-      window.addEventListener('online', updateOfflineBar);
+      window.addEventListener('online', () => { updateOfflineBar(); resolvePendingRates(); });
       window.addEventListener('offline', updateOfflineBar);
     };
     function handleCred(resp) {
@@ -1562,13 +1574,21 @@
     function cats(t) {
       const dictName = t === 'exp' ? 'expenseCategories' : t === 'inc' ? 'incomeCategories' : 'businessCategories';
       const dict = dictionaries[dictName] || {};
-      return Object.keys(dict).sort().map(id => ({ id, name: dict[id] }));
+      const freq = {};
+      allRecords.forEach(r => { if (r._t === t && r.categoryId) freq[r.categoryId] = (freq[r.categoryId] || 0) + 1; });
+      return Object.keys(dict)
+        .map(id => ({ id, name: dict[id], count: freq[id] || 0 }))
+        .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)); // за частотою, при рівності — за ID
     }
     // Повертає масив назв (для автопідказки опису/підкатегорії — пошук по тексту)
     function descs(t) {
       const dictName = t === 'exp' ? 'expenseDescriptions' : t === 'inc' ? 'incomeDescriptions' : 'businessDescriptions';
       const dict = dictionaries[dictName] || {};
-      return Object.values(dict);
+      const freq = {};
+      allRecords.forEach(r => { if (r._t === t && r.descId) freq[r.descId] = (freq[r.descId] || 0) + 1; });
+      return Object.entries(dict)
+        .sort((a, b) => (freq[b[0]] || 0) - (freq[a[0]] || 0))
+        .map(([, name]) => name);
     }
     function subcatNames() {
       const dict = dictionaries.expenseSubcategories || {};
@@ -1674,7 +1694,10 @@
       const input = document.getElementById(inputId), drop = document.getElementById(dropId);
       const catId = document.getElementById('fCat').value;
       const catName = resolveName('expenseCategories', catId) || catId;
-      const known = [...new Set(allRecords.filter(r => r._t === 'exp' && r.category === catName && r.subcategory).map(r => r.subcategory))];
+      const subFreq = {};
+      allRecords.filter(r => r._t === 'exp' && r.category === catName && r.subcategory)
+        .forEach(r => { subFreq[r.subcategory] = (subFreq[r.subcategory] || 0) + 1; });
+      const known = Object.keys(subFreq).sort((a, b) => subFreq[b] - subFreq[a]);
 
       let html = known.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
       html += `<div class="desc-opt" data-other="1" style="color:var(--acc);font-weight:600">… Інша (ввести текст)</div>`;
@@ -1730,7 +1753,10 @@
       const input = document.getElementById(inputId), drop = document.getElementById(dropId);
       const catId = document.getElementById('eCat').value;
       const catName = resolveName('expenseCategories', catId) || catId;
-      const known = [...new Set(allRecords.filter(r => r._t === 'exp' && r.category === catName && r.subcategory).map(r => r.subcategory))];
+      const subFreq = {};
+      allRecords.filter(r => r._t === 'exp' && r.category === catName && r.subcategory)
+        .forEach(r => { subFreq[r.subcategory] = (subFreq[r.subcategory] || 0) + 1; });
+      const known = Object.keys(subFreq).sort((a, b) => subFreq[b] - subFreq[a]);
 
       let html = known.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
       html += `<div class="desc-opt" data-other="1" style="color:var(--acc);font-weight:600">… Інша (ввести текст)</div>`;
@@ -1809,22 +1835,25 @@
         const subcat = document.getElementById('fSubcat').value.trim();
         const subcategoryId = (addTab === 'exp' && subcat) ? await resolveOrCreate('expenseSubcategories', 'ExSub', subcat) : '';
 
-        const rateResp = await api({ action: 'getRateSync', currency: cur, to: 'USD', date });
-        const rateUSD = rateResp.rate || 1;
-        const amountUSD = +amt * rateUSD;
-
-        let rateUAH = 1, amountUAH = 0;
-        if (addTab === 'biz') {
-          const rateRespUAH = await api({ action: 'getRateSync', currency: cur, to: 'UAH', date });
-          rateUAH = rateRespUAH.rate || 1;
-          amountUAH = +amt * rateUAH;
+        let rateUSD = 1, rateUAH = 1, rateResolved = true;
+        try {
+          const rateResp = await api({ action: 'getRateSync', currency: cur, to: 'USD', date });
+          rateUSD = rateResp.rate || 1;
+          if (addTab === 'biz') {
+            const rateRespUAH = await api({ action: 'getRateSync', currency: cur, to: 'UAH', date });
+            rateUAH = rateRespUAH.rate || 1;
+          }
+        } catch (e) {
+          rateResolved = false; // немає мережі до Apps Script — дорахуємо пізніше
         }
+        const amountUSD = +amt * rateUSD;
+        const amountUAH = +amt * rateUAH;
 
         const targetCollection = addTab === 'exp' ? 'expenses' : addTab === 'inc' ? 'income' : 'business';
         const docData = {
           categoryId: catId, amount: +amt, descId, currencyId,
           subcategoryId,
-          rateUSD, amountUSD,
+          rateUSD, amountUSD, rateResolved,
           date, author: userEmail, status: 'ACTIVE',
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -1832,6 +1861,11 @@
         if (addTab === 'biz') { docData.rateUAH = rateUAH; docData.amountUAH = amountUAH; }
 
         const docRef = await fbDb.collection(targetCollection).add(docData);
+
+        if (!rateResolved) {
+          pendingRates.push({ collection: targetCollection, docId: docRef.id, currency: cur, date, isBusiness: addTab === 'biz' });
+          savePendingRates();
+        }
 
         const catDictName = addTab === 'exp' ? 'expenseCategories' : addTab === 'inc' ? 'incomeCategories' : 'businessCategories';
         allRecords.unshift({
@@ -1860,7 +1894,40 @@
 
     // ── Offline ──
     function saveQueue() { localStorage.setItem('offlineQ', JSON.stringify(offlineQueue)); updateSyncBadge(); }
-    function updateSyncBadge() { const c = document.getElementById('syncCnt'); c.textContent = offlineQueue.length; c.classList.toggle('show', offlineQueue.length > 0); }
+    function updateSyncBadge() {
+      const total = offlineQueue.length + pendingRates.length;
+      const c = document.getElementById('syncCnt');
+      c.textContent = total; c.classList.toggle('show', total > 0);
+    }
+    async function resolvePendingRates() {
+      if (!navigator.onLine || !pendingRates.length) return;
+      const remaining = [];
+      for (const job of pendingRates) {
+        try {
+          const rateResp = await api({ action: 'getRateSync', currency: job.currency, to: 'USD', date: job.date });
+          const rateUSD = rateResp.rate || 1;
+          const update = { rateUSD, amountUSD: null, rateResolved: true };
+          // amountUSD рахуємо по фактичній сумі запису, а не заново запитуємо суму
+          const docSnap = await fbDb.collection(job.collection).doc(job.docId).get();
+          const amt = docSnap.exists ? docSnap.data().amount : 0;
+          update.amountUSD = amt * rateUSD;
+
+          if (job.isBusiness) {
+            const rateRespUAH = await api({ action: 'getRateSync', currency: job.currency, to: 'UAH', date: job.date });
+            update.rateUAH = rateRespUAH.rate || 1;
+            update.amountUAH = amt * update.rateUAH;
+          }
+
+          await fbDb.collection(job.collection).doc(job.docId).update(update);
+        } catch (e) {
+          remaining.push(job); // не вийшло — лишаємо в черзі, спробуємо наступного разу
+        }
+      }
+      pendingRates = remaining;
+      savePendingRates();
+      if (remaining.length === 0) showToast('✓ Курси розраховано', 'ok');
+    }
+
     async function syncOffline() {
       if (!navigator.onLine) { showToast('Немає з\'єднання', 'err'); return; }
       if (!offlineQueue.length) { showToast('Нічого синхронізувати', 'info'); return; }
