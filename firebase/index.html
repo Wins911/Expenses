@@ -1411,13 +1411,13 @@
 
     // ── Завантаження довідників з Firestore ──
     const DICT_DOCS = [
-  'expenseCategories', 'incomeCategories', 'businessCategories',
-  'expenseSubcategories',
-  'expenseDescriptions', 'incomeDescriptions', 'businessDescriptions',
-  'expenseCategorySubcategories',
-  'expenseCategoryDescriptions', 'incomeCategoryDescriptions', 'businessCategoryDescriptions',
-  'currencies', 'months', 'counters'
-];
+      'expenseCategories', 'incomeCategories', 'businessCategories',
+      'expenseSubcategories',
+      'expenseDescriptions', 'incomeDescriptions', 'businessDescriptions',
+      'expenseCategorySubcategories',
+      'expenseCategoryDescriptions', 'incomeCategoryDescriptions', 'businessCategoryDescriptions',
+      'currencies', 'months', 'counters'
+    ];
     async function loadDictionaries() {
       try {
         const results = await Promise.all(
@@ -1664,55 +1664,66 @@
 
     // ── Desc Autocomplete ──
     function onDescInput(inputId, dropId) {
-  const input = document.getElementById(inputId), drop = document.getElementById(dropId);
-  const val = input.value.trim().toLowerCase();
-  const t = inputId === 'fDesc' ? addTab : (editRec?._t || addTab);
-  if (!val) { drop.classList.remove('show'); return; }
+      const input = document.getElementById(inputId), drop = document.getElementById(dropId);
+      const val = input.value.trim().toLowerCase();
+      const t = inputId === 'fDesc' ? addTab : (editRec?._t || addTab);
+      if (!val) { drop.classList.remove('show'); return; }
 
-  const catSelectId = inputId === 'fDesc' ? 'fCat' : 'eCat';
-  const catId = document.getElementById(catSelectId)?.value || '';
-  const mapDictName = t === 'exp' ? 'expenseCategoryDescriptions' : t === 'inc' ? 'incomeCategoryDescriptions' : 'businessCategoryDescriptions';
-  const dscDictName = t === 'exp' ? 'expenseDescriptions' : t === 'inc' ? 'incomeDescriptions' : 'businessDescriptions';
+      const catSelectId = inputId === 'fDesc' ? 'fCat' : 'eCat';
+      const catId = document.getElementById(catSelectId)?.value || '';
+      const mapDictName = t === 'exp' ? 'expenseCategoryDescriptions' : t === 'inc' ? 'incomeCategoryDescriptions' : 'businessCategoryDescriptions';
+      const dscDictName = t === 'exp' ? 'expenseDescriptions' : t === 'inc' ? 'incomeDescriptions' : 'businessDescriptions';
 
-  const descIds = dictionaries[mapDictName]?.[catId] || [];
-  const known = descIds.map(id => resolveName(dscDictName, id));
-  const items = known.filter(d => d.toLowerCase().includes(val)).slice(0, 7);
-  if (!items.length) { drop.classList.remove('show'); return; }
+      const descIds = dictionaries[mapDictName]?.[catId] || [];
+      const known = descIds.map(id => resolveName(dscDictName, id));
+      const items = known.filter(d => d.toLowerCase().includes(val)).slice(0, 7);
+      if (!items.length) { drop.classList.remove('show'); return; }
+      // data-val замість вбудованого JS-рядка — уникає поламки HTML лапками в описі
+      drop.innerHTML = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
+      drop.querySelectorAll('.desc-opt').forEach(el => {
+        el.addEventListener('mousedown', e => {
+          e.preventDefault();
+          document.getElementById(inputId).value = el.dataset.val;
+          drop.classList.remove('show');
+        });
+      });
+      drop.classList.add('show');
+    }
     // ── Subcat Autocomplete ──
     let subcatFreeText = false;
 
     function openSubcatDropdown(inputId, dropId) {
-  if (subcatFreeText) return;
-  const input = document.getElementById(inputId), drop = document.getElementById(dropId);
-  const catId = document.getElementById('fCat').value;
+      if (subcatFreeText) return;
+      const input = document.getElementById(inputId), drop = document.getElementById(dropId);
+      const catId = document.getElementById('fCat').value;
 
-  const subIds = dictionaries.expenseCategorySubcategories?.[catId] || [];
-  const known = subIds.map(id => resolveName('expenseSubcategories', id));
+      const subIds = dictionaries.expenseCategorySubcategories?.[catId] || [];
+      const known = subIds.map(id => resolveName('expenseSubcategories', id));
 
-  let html = known.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
-  if (subIds.length < 5) {
-    html += `<div class="desc-opt" data-other="1" style="color:var(--acc);font-weight:600">… Інша (ввести текст)</div>`;
-  }
-  drop.innerHTML = html;
-
-  drop.querySelectorAll('.desc-opt').forEach(el => {
-    el.addEventListener('mousedown', e => {
-      e.preventDefault();
-      if (el.dataset.other) {
-        subcatFreeText = true;
-        input.removeAttribute('readonly');
-        input.value = '';
-        input.placeholder = 'Введіть нову підкатегорію…';
-        drop.classList.remove('show');
-        input.focus();
-      } else {
-        input.value = el.dataset.val;
-        drop.classList.remove('show');
+      let html = known.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
+      if (subIds.length < 5) {
+        html += `<div class="desc-opt" data-other="1" style="color:var(--acc);font-weight:600">… Інша (ввести текст)</div>`;
       }
-    });
-  });
-  drop.classList.add('show');
-}
+      drop.innerHTML = html;
+
+      drop.querySelectorAll('.desc-opt').forEach(el => {
+        el.addEventListener('mousedown', e => {
+          e.preventDefault();
+          if (el.dataset.other) {
+            subcatFreeText = true;
+            input.removeAttribute('readonly');
+            input.value = '';
+            input.placeholder = 'Введіть нову підкатегорію…';
+            drop.classList.remove('show');
+            input.focus();
+          } else {
+            input.value = el.dataset.val;
+            drop.classList.remove('show');
+          }
+        });
+      });
+      drop.classList.add('show');
+    }
 
     function onSubcatFreeInput(inputId, dropId) {
       if (!subcatFreeText) return;
@@ -1741,37 +1752,37 @@
     let eSubcatFreeText = false;
 
     function openSubcatDropdownEdit(inputId, dropId) {
-  if (eSubcatFreeText) return;
-  const input = document.getElementById(inputId), drop = document.getElementById(dropId);
-  const catId = document.getElementById('eCat').value;
+      if (eSubcatFreeText) return;
+      const input = document.getElementById(inputId), drop = document.getElementById(dropId);
+      const catId = document.getElementById('eCat').value;
 
-  const subIds = dictionaries.expenseCategorySubcategories?.[catId] || [];
-  const known = subIds.map(id => resolveName('expenseSubcategories', id));
+      const subIds = dictionaries.expenseCategorySubcategories?.[catId] || [];
+      const known = subIds.map(id => resolveName('expenseSubcategories', id));
 
-  let html = known.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
-  if (subIds.length < 5) {
-    html += `<div class="desc-opt" data-other="1" style="color:var(--acc);font-weight:600">… Інша (ввести текст)</div>`;
-  }
-  drop.innerHTML = html;
-
-  drop.querySelectorAll('.desc-opt').forEach(el => {
-    el.addEventListener('mousedown', e => {
-      e.preventDefault();
-      if (el.dataset.other) {
-        eSubcatFreeText = true;
-        input.removeAttribute('readonly');
-        input.value = '';
-        input.placeholder = 'Введіть нову підкатегорію…';
-        drop.classList.remove('show');
-        input.focus();
-      } else {
-        input.value = el.dataset.val;
-        drop.classList.remove('show');
+      let html = known.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
+      if (subIds.length < 5) {
+        html += `<div class="desc-opt" data-other="1" style="color:var(--acc);font-weight:600">… Інша (ввести текст)</div>`;
       }
-    });
-  });
-  drop.classList.add('show');
-}
+      drop.innerHTML = html;
+
+      drop.querySelectorAll('.desc-opt').forEach(el => {
+        el.addEventListener('mousedown', e => {
+          e.preventDefault();
+          if (el.dataset.other) {
+            eSubcatFreeText = true;
+            input.removeAttribute('readonly');
+            input.value = '';
+            input.placeholder = 'Введіть нову підкатегорію…';
+            drop.classList.remove('show');
+            input.focus();
+          } else {
+            input.value = el.dataset.val;
+            drop.classList.remove('show');
+          }
+        });
+      });
+      drop.classList.add('show');
+    }
 
     function onSubcatFreeInputEdit(inputId, dropId) {
       if (!eSubcatFreeText) return;
@@ -1822,11 +1833,33 @@
 
         const descDictName = addTab === 'exp' ? 'expenseDescriptions' : addTab === 'inc' ? 'incomeDescriptions' : 'businessDescriptions';
         const descPrefix = addTab === 'exp' ? 'ExDsc' : addTab === 'inc' ? 'InDsc' : 'BzDsc';
-        const descId = desc ? await resolveOrCreate(descDictName, descPrefix, desc) : '';
+        const descInsheId = addTab === 'exp' ? 'ExDsc_INSHE' : addTab === 'inc' ? 'InDsc_INSHE' : 'BzDsc_INSHE';
+        let descId = desc ? await resolveOrCreate(descDictName, descPrefix, desc) : descInsheId;
+
+        // Новий опис — одразу додаємо в мапу категорія→описи, щоб з'явився в підказках наступного разу
+        if (desc && descId !== descInsheId) {
+          const mapDictName = addTab === 'exp' ? 'expenseCategoryDescriptions' : addTab === 'inc' ? 'incomeCategoryDescriptions' : 'businessCategoryDescriptions';
+          const currentList = dictionaries[mapDictName]?.[catId] || [];
+          if (!currentList.includes(descId)) {
+            const newList = [...currentList, descId];
+            await fbDb.collection('dictionaries').doc(mapDictName).set({ [catId]: newList }, { merge: true });
+            if (!dictionaries[mapDictName]) dictionaries[mapDictName] = {};
+            dictionaries[mapDictName][catId] = newList;
+          }
+        }
 
         const subcat = document.getElementById('fSubcat').value.trim();
-        const subcategoryId = (addTab === 'exp' && subcat) ? await resolveOrCreate('expenseSubcategories', 'ExSub', subcat) : '';
-
+        let subcategoryId = 'ExSub_INSHE';
+        if (addTab === 'exp' && subcat) {
+          subcategoryId = await resolveOrCreate('expenseSubcategories', 'ExSub', subcat);
+          const currentSubs = dictionaries.expenseCategorySubcategories?.[catId] || [];
+          if (!currentSubs.includes(subcategoryId) && currentSubs.length < 5) {
+            const newSubs = [...currentSubs, subcategoryId];
+            await fbDb.collection('dictionaries').doc('expenseCategorySubcategories').set({ [catId]: newSubs }, { merge: true });
+            if (!dictionaries.expenseCategorySubcategories) dictionaries.expenseCategorySubcategories = {};
+            dictionaries.expenseCategorySubcategories[catId] = newSubs;
+          }
+        }
         let rateUSD = 1, rateUAH = 1, rateResolved = true;
         try {
           const rateResp = await api({ action: 'getRateSync', currency: cur, to: 'USD', date });
@@ -2146,10 +2179,31 @@
 
         const descDictName = editRec._t === 'exp' ? 'expenseDescriptions' : editRec._t === 'inc' ? 'incomeDescriptions' : 'businessDescriptions';
         const descPrefix = editRec._t === 'exp' ? 'ExDsc' : editRec._t === 'inc' ? 'InDsc' : 'BzDsc';
-        const descId = descText ? await resolveOrCreate(descDictName, descPrefix, descText) : '';
+        const descInsheId = editRec._t === 'exp' ? 'ExDsc_INSHE' : editRec._t === 'inc' ? 'InDsc_INSHE' : 'BzDsc_INSHE';
+        let descId = descText ? await resolveOrCreate(descDictName, descPrefix, descText) : descInsheId;
 
-        const subcategoryId = (editRec._t === 'exp' && subcatText) ? await resolveOrCreate('expenseSubcategories', 'ExSub', subcatText) : '';
+        if (descText && descId !== descInsheId) {
+          const mapDictName = editRec._t === 'exp' ? 'expenseCategoryDescriptions' : editRec._t === 'inc' ? 'incomeCategoryDescriptions' : 'businessCategoryDescriptions';
+          const currentList = dictionaries[mapDictName]?.[catId] || [];
+          if (!currentList.includes(descId)) {
+            const newList = [...currentList, descId];
+            await fbDb.collection('dictionaries').doc(mapDictName).set({ [catId]: newList }, { merge: true });
+            if (!dictionaries[mapDictName]) dictionaries[mapDictName] = {};
+            dictionaries[mapDictName][catId] = newList;
+          }
+        }
 
+        let subcategoryId = 'ExSub_INSHE';
+        if (editRec._t === 'exp' && subcatText) {
+          subcategoryId = await resolveOrCreate('expenseSubcategories', 'ExSub', subcatText);
+          const currentSubs = dictionaries.expenseCategorySubcategories?.[catId] || [];
+          if (!currentSubs.includes(subcategoryId) && currentSubs.length < 5) {
+            const newSubs = [...currentSubs, subcategoryId];
+            await fbDb.collection('dictionaries').doc('expenseCategorySubcategories').set({ [catId]: newSubs }, { merge: true });
+            if (!dictionaries.expenseCategorySubcategories) dictionaries.expenseCategorySubcategories = {};
+            dictionaries.expenseCategorySubcategories[catId] = newSubs;
+          }
+        }
         const rateResp = await api({ action: 'getRateSync', currency, to: 'USD', date: isoDate });
         const rateUSD = rateResp.rate || 1;
         const amountUSD = amount * rateUSD;
