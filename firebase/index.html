@@ -1411,13 +1411,13 @@
 
     // ── Завантаження довідників з Firestore ──
     const DICT_DOCS = [
-      'expenseCategories', 'incomeCategories', 'businessCategories',
-      'expenseSubcategories',
-      'expenseDescriptions', 'incomeDescriptions', 'businessDescriptions',
-      'expenseCategorySubcategories',
-      'expenseCategoryDescriptions', 'incomeCategoryDescriptions', 'businessCategoryDescriptions',
-      'currencies', 'months', 'counters'
-    ];
+  'expenseCategories', 'incomeCategories', 'businessCategories',
+  'expenseSubcategories',
+  'expenseDescriptions', 'incomeDescriptions', 'businessDescriptions',
+  'expenseCategorySubcategories',
+  'expenseCategoryDescriptions', 'incomeCategoryDescriptions', 'businessCategoryDescriptions',
+  'currencies', 'months', 'counters'
+];
     async function loadDictionaries() {
       try {
         const results = await Promise.all(
@@ -1671,391 +1671,379 @@
 
       const catSelectId = inputId === 'fDesc' ? 'fCat' : 'eCat';
       const catId = document.getElementById(catSelectId)?.value || '';
-      const mapDictName = t === 'exp' ? 'expenseCategoryDescriptions' : t === 'inc' ? 'incomeCategoryDescriptions' : 'businessCategoryDescriptions';
-      const dscDictName = t === 'exp' ? 'expenseDescriptions' : t === 'inc' ? 'incomeDescriptions' : 'businessDescriptions';
+      const catDictName = t === 'exp' ? 'expenseCategories' : t === 'inc' ? 'incomeCategories' : 'businessCategories';
+      const catName = resolveName(catDictName, catId) || catId;
 
-      const descIds = dictionaries[mapDictName]?.[catId] || [];
-      const known = descIds.map(id => resolveName(dscDictName, id));
+      const known = [...new Set(allRecords.filter(r => r._t === t && r.category === catName && r.desc).map(r => r.desc))];
       const items = known.filter(d => d.toLowerCase().includes(val)).slice(0, 7);
       if (!items.length) { drop.classList.remove('show'); return; }
-      // ── Subcat Autocomplete ──
-      let subcatFreeText = false;
-
-      function openSubcatDropdown(inputId, dropId) {
-        if (subcatFreeText) return;
-        const input = document.getElementById(inputId), drop = document.getElementById(dropId);
-        const catId = document.getElementById('fCat').value;
-
-        const subIds = dictionaries.expenseCategorySubcategories?.[catId] || [];
-        const known = subIds.map(id => resolveName('expenseSubcategories', id));
-
-        let html = known.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
-        if (subIds.length < 5) {
-          html += `<div class="desc-opt" data-other="1" style="color:var(--acc);font-weight:600">… Інша (ввести текст)</div>`;
-        }
-        drop.innerHTML = html;
-
-        drop.querySelectorAll('.desc-opt').forEach(el => {
-          el.addEventListener('mousedown', e => {
-            e.preventDefault();
-            if (el.dataset.other) {
-              subcatFreeText = true;
-              input.removeAttribute('readonly');
-              input.value = '';
-              input.placeholder = 'Введіть нову підкатегорію…';
-              drop.classList.remove('show');
-              input.focus();
-            } else {
-              input.value = el.dataset.val;
-              drop.classList.remove('show');
-            }
-          });
+      // data-val замість вбудованого JS-рядка — уникає поламки HTML лапками в описі
+      drop.innerHTML = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
+      drop.querySelectorAll('.desc-opt').forEach(el => {
+        el.addEventListener('mousedown', e => {
+          e.preventDefault();
+          document.getElementById(inputId).value = el.dataset.val;
+          drop.classList.remove('show');
         });
-        drop.classList.add('show');
-      }
+      });
+      drop.classList.add('show');
+    }
+    // ── Subcat Autocomplete ──
+    let subcatFreeText = false;
 
-      function onSubcatFreeInput(inputId, dropId) {
-        if (!subcatFreeText) return;
-        const input = document.getElementById(inputId), drop = document.getElementById(dropId);
-        const val = input.value.trim().toLowerCase();
-        if (!val) { drop.classList.remove('show'); return; }
-        const items = subcatNames().filter(d => d.toLowerCase().includes(val)).slice(0, 7);
-        if (!items.length) { drop.classList.remove('show'); return; }
-        drop.innerHTML = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
-        drop.querySelectorAll('.desc-opt').forEach(el => {
-          el.addEventListener('mousedown', e => {
-            e.preventDefault();
-            input.value = el.dataset.val;
-            drop.classList.remove('show');
-          });
+    function openSubcatDropdown(inputId, dropId) {
+  if (subcatFreeText) return;
+  const input = document.getElementById(inputId), drop = document.getElementById(dropId);
+  const catId = document.getElementById('fCat').value;
+
+  const subIds = dictionaries.expenseCategorySubcategories?.[catId] || [];
+  const known = subIds.map(id => resolveName('expenseSubcategories', id));
+
+  let html = known.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
+  if (subIds.length < 5) {
+    html += `<div class="desc-opt" data-other="1" style="color:var(--acc);font-weight:600">… Інша (ввести текст)</div>`;
+  }
+  drop.innerHTML = html;
+
+  drop.querySelectorAll('.desc-opt').forEach(el => {
+    el.addEventListener('mousedown', e => {
+      e.preventDefault();
+      if (el.dataset.other) {
+        subcatFreeText = true;
+        input.removeAttribute('readonly');
+        input.value = '';
+        input.placeholder = 'Введіть нову підкатегорію…';
+        drop.classList.remove('show');
+        input.focus();
+      } else {
+        input.value = el.dataset.val;
+        drop.classList.remove('show');
+      }
+    });
+  });
+  drop.classList.add('show');
+}
+
+    function onSubcatFreeInput(inputId, dropId) {
+      if (!subcatFreeText) return;
+      const input = document.getElementById(inputId), drop = document.getElementById(dropId);
+      const val = input.value.trim().toLowerCase();
+      if (!val) { drop.classList.remove('show'); return; }
+      const items = subcatNames().filter(d => d.toLowerCase().includes(val)).slice(0, 7);
+      if (!items.length) { drop.classList.remove('show'); return; }
+      drop.innerHTML = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
+      drop.querySelectorAll('.desc-opt').forEach(el => {
+        el.addEventListener('mousedown', e => {
+          e.preventDefault();
+          input.value = el.dataset.val;
+          drop.classList.remove('show');
         });
-        drop.classList.add('show');
+      });
+      drop.classList.add('show');
+    }
+
+    function resetSubcatField() {
+      subcatFreeText = false;
+      const input = document.getElementById('fSubcat');
+      if (input) { input.setAttribute('readonly', 'readonly'); input.placeholder = 'Виберіть підкатегорію…'; input.value = ''; }
+    }
+
+    let eSubcatFreeText = false;
+
+    function openSubcatDropdownEdit(inputId, dropId) {
+  if (eSubcatFreeText) return;
+  const input = document.getElementById(inputId), drop = document.getElementById(dropId);
+  const catId = document.getElementById('eCat').value;
+
+  const subIds = dictionaries.expenseCategorySubcategories?.[catId] || [];
+  const known = subIds.map(id => resolveName('expenseSubcategories', id));
+
+  let html = known.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
+  if (subIds.length < 5) {
+    html += `<div class="desc-opt" data-other="1" style="color:var(--acc);font-weight:600">… Інша (ввести текст)</div>`;
+  }
+  drop.innerHTML = html;
+
+  drop.querySelectorAll('.desc-opt').forEach(el => {
+    el.addEventListener('mousedown', e => {
+      e.preventDefault();
+      if (el.dataset.other) {
+        eSubcatFreeText = true;
+        input.removeAttribute('readonly');
+        input.value = '';
+        input.placeholder = 'Введіть нову підкатегорію…';
+        drop.classList.remove('show');
+        input.focus();
+      } else {
+        input.value = el.dataset.val;
+        drop.classList.remove('show');
       }
+    });
+  });
+  drop.classList.add('show');
+}
 
-      function resetSubcatField() {
-        subcatFreeText = false;
-        const input = document.getElementById('fSubcat');
-        if (input) { input.setAttribute('readonly', 'readonly'); input.placeholder = 'Виберіть підкатегорію…'; input.value = ''; }
-      }
-
-      let eSubcatFreeText = false;
-
-      function openSubcatDropdownEdit(inputId, dropId) {
-        if (eSubcatFreeText) return;
-        const input = document.getElementById(inputId), drop = document.getElementById(dropId);
-        const catId = document.getElementById('eCat').value;
-
-        const subIds = dictionaries.expenseCategorySubcategories?.[catId] || [];
-        const known = subIds.map(id => resolveName('expenseSubcategories', id));
-
-        let html = known.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
-        if (subIds.length < 5) {
-          html += `<div class="desc-opt" data-other="1" style="color:var(--acc);font-weight:600">… Інша (ввести текст)</div>`;
-        }
-        drop.innerHTML = html;
-
-        drop.querySelectorAll('.desc-opt').forEach(el => {
-          el.addEventListener('mousedown', e => {
-            e.preventDefault();
-            if (el.dataset.other) {
-              eSubcatFreeText = true;
-              input.removeAttribute('readonly');
-              input.value = '';
-              input.placeholder = 'Введіть нову підкатегорію…';
-              drop.classList.remove('show');
-              input.focus();
-            } else {
-              input.value = el.dataset.val;
-              drop.classList.remove('show');
-            }
-          });
+    function onSubcatFreeInputEdit(inputId, dropId) {
+      if (!eSubcatFreeText) return;
+      const input = document.getElementById(inputId), drop = document.getElementById(dropId);
+      const val = input.value.trim().toLowerCase();
+      if (!val) { drop.classList.remove('show'); return; }
+      const items = subcatNames().filter(d => d.toLowerCase().includes(val)).slice(0, 7);
+      if (!items.length) { drop.classList.remove('show'); return; }
+      drop.innerHTML = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
+      drop.querySelectorAll('.desc-opt').forEach(el => {
+        el.addEventListener('mousedown', e => {
+          e.preventDefault();
+          input.value = el.dataset.val;
+          drop.classList.remove('show');
         });
-        drop.classList.add('show');
-      }
+      });
+      drop.classList.add('show');
+    }
 
-      function onSubcatFreeInputEdit(inputId, dropId) {
-        if (!eSubcatFreeText) return;
-        const input = document.getElementById(inputId), drop = document.getElementById(dropId);
-        const val = input.value.trim().toLowerCase();
-        if (!val) { drop.classList.remove('show'); return; }
-        const items = subcatNames().filter(d => d.toLowerCase().includes(val)).slice(0, 7);
-        if (!items.length) { drop.classList.remove('show'); return; }
-        drop.innerHTML = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
-        drop.querySelectorAll('.desc-opt').forEach(el => {
-          el.addEventListener('mousedown', e => {
-            e.preventDefault();
-            input.value = el.dataset.val;
-            drop.classList.remove('show');
-          });
-        });
-        drop.classList.add('show');
-      }
+    function resetSubcatFieldEdit() {
+      eSubcatFreeText = false;
+      const input = document.getElementById('eSubcat');
+      if (input) { input.setAttribute('readonly', 'readonly'); input.placeholder = 'Виберіть підкатегорію…'; }
+    }
 
-      function resetSubcatFieldEdit() {
-        eSubcatFreeText = false;
-        const input = document.getElementById('eSubcat');
-        if (input) { input.setAttribute('readonly', 'readonly'); input.placeholder = 'Виберіть підкатегорію…'; }
-      }
+    function hideDescDrop(id) { setTimeout(() => document.getElementById(id)?.classList.remove('show'), 200); }
+    function pickDesc(inputId, val, dropId) { document.getElementById(inputId).value = val; document.getElementById(dropId).classList.remove('show'); }
 
-      function hideDescDrop(id) { setTimeout(() => document.getElementById(id)?.classList.remove('show'), 200); }
-      function pickDesc(inputId, val, dropId) { document.getElementById(inputId).value = val; document.getElementById(dropId).classList.remove('show'); }
+    // ── Save Record ──
+    async function saveRecord() {
+      const date = document.getElementById('fDate').value, catId = document.getElementById('fCat').value;
+      const amt = document.getElementById('fAmt').value.trim(), desc = document.getElementById('fDesc').value.trim();
+      const cur = activeCur(); // код валюти, напр. "UAH"
+      if (!date) { showToast('Вкажіть дату', 'err'); return; }
+      if (!catId) { showToast('Виберіть категорію', 'err'); return; }
+      if (!amt || +amt === 0) { showToast('Введіть суму', 'err'); return; }
+      if (!cur) { showToast('Вкажіть валюту', 'err'); return; }
 
-      // ── Save Record ──
-      async function saveRecord() {
-        const date = document.getElementById('fDate').value, catId = document.getElementById('fCat').value;
-        const amt = document.getElementById('fAmt').value.trim(), desc = document.getElementById('fDesc').value.trim();
-        const cur = activeCur(); // код валюти, напр. "UAH"
-        if (!date) { showToast('Вкажіть дату', 'err'); return; }
-        if (!catId) { showToast('Виберіть категорію', 'err'); return; }
-        if (!amt || +amt === 0) { showToast('Введіть суму', 'err'); return; }
-        if (!cur) { showToast('Вкажіть валюту', 'err'); return; }
+      const btn = document.getElementById('saveBtn');
+      btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Збереження…';
+      if (!navigator.onLine) { offlineQueue.push(payload); saveQueue(); showToast('⚡ Збережено офлайн', 'info'); afterSave(btn); return; }
 
-        const btn = document.getElementById('saveBtn');
-        btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Збереження…';
-        if (!navigator.onLine) { offlineQueue.push(payload); saveQueue(); showToast('⚡ Збережено офлайн', 'info'); afterSave(btn); return; }
+      try {
+        // ── Резолвимо/створюємо ID для валюти, опису, підкатегорії ──
+        const currencyId = (selectedCur?.id && selectedCur.id !== '__other__')
+          ? selectedCur.id
+          : await resolveOrCreateCurrency(cur);
 
+        const descDictName = addTab === 'exp' ? 'expenseDescriptions' : addTab === 'inc' ? 'incomeDescriptions' : 'businessDescriptions';
+        const descPrefix = addTab === 'exp' ? 'ExDsc' : addTab === 'inc' ? 'InDsc' : 'BzDsc';
+        const descId = desc ? await resolveOrCreate(descDictName, descPrefix, desc) : '';
+
+        const subcat = document.getElementById('fSubcat').value.trim();
+        const subcategoryId = (addTab === 'exp' && subcat) ? await resolveOrCreate('expenseSubcategories', 'ExSub', subcat) : '';
+
+        let rateUSD = 1, rateUAH = 1, rateResolved = true;
         try {
-          // ── Резолвимо/створюємо ID для валюти, опису, підкатегорії ──
-          const currencyId = (selectedCur?.id && selectedCur.id !== '__other__')
-            ? selectedCur.id
-            : await resolveOrCreateCurrency(cur);
-
-          const descDictName = addTab === 'exp' ? 'expenseDescriptions' : addTab === 'inc' ? 'incomeDescriptions' : 'businessDescriptions';
-          const descPrefix = addTab === 'exp' ? 'ExDsc' : addTab === 'inc' ? 'InDsc' : 'BzDsc';
-          const descInsheId = addTab === 'exp' ? 'ExDsc_INSHE' : addTab === 'inc' ? 'InDsc_INSHE' : 'BzDsc_INSHE';
-          let descId = desc ? await resolveOrCreate(descDictName, descPrefix, desc) : descInsheId;
-
-          // Новий опис — одразу додаємо в мапу категорія→описи, щоб з'явився в підказках наступного разу
-          if (desc && descId !== descInsheId) {
-            const mapDictName = addTab === 'exp' ? 'expenseCategoryDescriptions' : addTab === 'inc' ? 'incomeCategoryDescriptions' : 'businessCategoryDescriptions';
-            const currentList = dictionaries[mapDictName]?.[catId] || [];
-            if (!currentList.includes(descId)) {
-              const newList = [...currentList, descId];
-              await fbDb.collection('dictionaries').doc(mapDictName).set({ [catId]: newList }, { merge: true });
-              if (!dictionaries[mapDictName]) dictionaries[mapDictName] = {};
-              dictionaries[mapDictName][catId] = newList;
-            }
+          const rateResp = await api({ action: 'getRateSync', currency: cur, to: 'USD', date });
+          rateUSD = rateResp.rate || 1;
+          if (addTab === 'biz') {
+            const rateRespUAH = await api({ action: 'getRateSync', currency: cur, to: 'UAH', date });
+            rateUAH = rateRespUAH.rate || 1;
           }
-
-          const subcat = document.getElementById('fSubcat').value.trim();
-          let subcategoryId = 'ExSub_INSHE';
-          if (addTab === 'exp' && subcat) {
-            subcategoryId = await resolveOrCreate('expenseSubcategories', 'ExSub', subcat);
-            const currentSubs = dictionaries.expenseCategorySubcategories?.[catId] || [];
-            if (!currentSubs.includes(subcategoryId) && currentSubs.length < 5) {
-              const newSubs = [...currentSubs, subcategoryId];
-              await fbDb.collection('dictionaries').doc('expenseCategorySubcategories').set({ [catId]: newSubs }, { merge: true });
-              if (!dictionaries.expenseCategorySubcategories) dictionaries.expenseCategorySubcategories = {};
-              dictionaries.expenseCategorySubcategories[catId] = newSubs;
-            }
-          }
-          let rateUSD = 1, rateUAH = 1, rateResolved = true;
-          try {
-            const rateResp = await api({ action: 'getRateSync', currency: cur, to: 'USD', date });
-            rateUSD = rateResp.rate || 1;
-            if (addTab === 'biz') {
-              const rateRespUAH = await api({ action: 'getRateSync', currency: cur, to: 'UAH', date });
-              rateUAH = rateRespUAH.rate || 1;
-            }
-          } catch (e) {
-            rateResolved = false; // немає мережі до Apps Script — дорахуємо пізніше
-          }
-          const amountUSD = +amt * rateUSD;
-          const amountUAH = +amt * rateUAH;
-
-          const targetCollection = addTab === 'exp' ? 'expenses' : addTab === 'inc' ? 'income' : 'business';
-          const docData = {
-            categoryId: catId, amount: +amt, descId, currencyId,
-            subcategoryId,
-            rateUSD, amountUSD, rateResolved,
-            date, author: userEmail, status: 'ACTIVE',
-            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-          };
-          if (addTab === 'biz') { docData.rateUAH = rateUAH; docData.amountUAH = amountUAH; }
-
-          const docRef = await fbDb.collection(targetCollection).add(docData);
-
-          if (!rateResolved) {
-            pendingRates.push({ collection: targetCollection, docId: docRef.id, currency: cur, date, isBusiness: addTab === 'biz' });
-            savePendingRates();
-          }
-
-          const catDictName = addTab === 'exp' ? 'expenseCategories' : addTab === 'inc' ? 'incomeCategories' : 'businessCategories';
-          allRecords.unshift({
-            row: docRef.id, _t: addTab,
-            date: formatFsDate(date), amount: +amt,
-            categoryId: catId, category: resolveName(catDictName, catId),
-            descId, desc: resolveName(descDictName, descId),
-            subcategoryId, subcategory: resolveName('expenseSubcategories', subcategoryId),
-            currencyId, currency: cur,
-            usd: amountUSD, uah: addTab === 'biz' ? amountUAH : undefined
-          });
-          cSet('records', allRecords);
-
-          showToast('✓ Збережено', 'ok'); afterSave(btn);
         } catch (e) {
-          showToast('Помилка: ' + e.message, 'err');
-          btn.disabled = false; btn.textContent = TAB_CFG[addTab].label;
+          rateResolved = false; // немає мережі до Apps Script — дорахуємо пізніше
         }
-      }
+        const amountUSD = +amt * rateUSD;
+        const amountUAH = +amt * rateUAH;
 
-      function afterSave(btn) {
-        document.getElementById('fAmt').value = ''; document.getElementById('fSubcat').value = ''; document.getElementById('fDesc').value = '';
-        btn.disabled = false; btn.textContent = TAB_CFG[addTab].label;
-        updateSyncBadge(); setTimeout(() => document.getElementById('fAmt').focus(), 150);
-      }
+        const targetCollection = addTab === 'exp' ? 'expenses' : addTab === 'inc' ? 'income' : 'business';
+        const docData = {
+          categoryId: catId, amount: +amt, descId, currencyId,
+          subcategoryId,
+          rateUSD, amountUSD, rateResolved,
+          date, author: userEmail, status: 'ACTIVE',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        if (addTab === 'biz') { docData.rateUAH = rateUAH; docData.amountUAH = amountUAH; }
 
-      // ── Offline ──
-      function saveQueue() { localStorage.setItem('offlineQ', JSON.stringify(offlineQueue)); updateSyncBadge(); }
-      function updateSyncBadge() {
-        const total = offlineQueue.length + pendingRates.length;
-        const c = document.getElementById('syncCnt');
-        c.textContent = total; c.classList.toggle('show', total > 0);
-      }
-      async function resolvePendingRates() {
-        if (!navigator.onLine || !pendingRates.length) return;
-        const remaining = [];
-        for (const job of pendingRates) {
-          try {
-            const rateResp = await api({ action: 'getRateSync', currency: job.currency, to: 'USD', date: job.date });
-            const rateUSD = rateResp.rate || 1;
-            const update = { rateUSD, amountUSD: null, rateResolved: true };
-            // amountUSD рахуємо по фактичній сумі запису, а не заново запитуємо суму
-            const docSnap = await fbDb.collection(job.collection).doc(job.docId).get();
-            const amt = docSnap.exists ? docSnap.data().amount : 0;
-            update.amountUSD = amt * rateUSD;
+        const docRef = await fbDb.collection(targetCollection).add(docData);
 
-            if (job.isBusiness) {
-              const rateRespUAH = await api({ action: 'getRateSync', currency: job.currency, to: 'UAH', date: job.date });
-              update.rateUAH = rateRespUAH.rate || 1;
-              update.amountUAH = amt * update.rateUAH;
-            }
-
-            await fbDb.collection(job.collection).doc(job.docId).update(update);
-          } catch (e) {
-            remaining.push(job); // не вийшло — лишаємо в черзі, спробуємо наступного разу
-          }
+        if (!rateResolved) {
+          pendingRates.push({ collection: targetCollection, docId: docRef.id, currency: cur, date, isBusiness: addTab === 'biz' });
+          savePendingRates();
         }
-        pendingRates = remaining;
-        savePendingRates();
-        if (remaining.length === 0) showToast('✓ Курси розраховано', 'ok');
-      }
 
-      async function syncOffline() {
-        if (!navigator.onLine) { showToast('Немає з\'єднання', 'err'); return; }
-        if (!offlineQueue.length) { showToast('Нічого синхронізувати', 'info'); return; }
-        showToast(`Синхронізація ${offlineQueue.length} записів…`, 'info');
-        let ok = 0; const failed = [];
-        for (const item of offlineQueue) {
-          try {
-            const r = await api(item);
-            if (r.status === 'ok') { ok++; if (item.offline && r.row) api({ action: 'resolveOfflineRate', sheet: item.sheet, row: r.row, currency: item.currency, date: item.date }).catch(() => { }); }
-            else failed.push(item);
-          } catch (e) { failed.push(item); }
-        }
-        offlineQueue = failed; saveQueue(); cSet('records', null);
-        showToast(ok ? `✓ Синхронізовано: ${ok}${failed.length ? ', помилок: ' + failed.length : ''}` : 'Помилка', 'ok');
-      }
-      function updateOfflineBar() { document.getElementById('offlineBar').classList.toggle('show', !navigator.onLine); }
-
-      // ── Records ──
-      async function loadRecords() {
-        const cached = await cGet('records');
-        if (cached && Array.isArray(cached)) { allRecords = cached; renderRecords(); }
-        else document.getElementById('recContainer').innerHTML = '<div class="rec-empty">Завантаження…</div>';
-        if (!navigator.onLine) return;
-        try {
-          const fresh = [];
-
-          const expSnap = await fbDb.collection('expenses').where('status', '==', 'ACTIVE').get();
-          expSnap.forEach(doc => {
-            const d = doc.data();
-            fresh.push({
-              row: doc.id, _t: 'exp',
-              date: formatFsDate(d.date), amount: d.amount,
-              categoryId: d.categoryId, category: resolveName('expenseCategories', d.categoryId),
-              descId: d.descId, desc: resolveName('expenseDescriptions', d.descId),
-              subcategoryId: d.subcategoryId || '', subcategory: resolveName('expenseSubcategories', d.subcategoryId),
-              currencyId: d.currencyId, currency: currencyCodeOf(d.currencyId),
-              usd: d.amountUSD || 0
-            });
-          });
-
-          const incSnap = await fbDb.collection('income').where('status', '==', 'ACTIVE').get();
-          incSnap.forEach(doc => {
-            const d = doc.data();
-            fresh.push({
-              row: doc.id, _t: 'inc',
-              date: formatFsDate(d.date), amount: d.amount,
-              categoryId: d.categoryId, category: resolveName('incomeCategories', d.categoryId),
-              descId: d.descId, desc: resolveName('incomeDescriptions', d.descId),
-              currencyId: d.currencyId, currency: currencyCodeOf(d.currencyId),
-              usd: d.amountUSD || 0
-            });
-          });
-
-          const bizSnap = await fbDb.collection('business').where('status', '==', 'ACTIVE').get();
-          bizSnap.forEach(doc => {
-            const d = doc.data();
-            fresh.push({
-              row: doc.id, _t: 'biz',
-              date: formatFsDate(d.date), amount: d.amount,
-              categoryId: d.categoryId, category: resolveName('businessCategories', d.categoryId),
-              descId: d.descId, desc: resolveName('businessDescriptions', d.descId),
-              currencyId: d.currencyId, currency: currencyCodeOf(d.currencyId),
-              usd: d.amountUSD || 0, uah: d.amountUAH || 0
-            });
-          });
-
-          fresh.sort((a, b) => parseDMY(b.date) - parseDMY(a.date));
-          allRecords = fresh; await cSet('records', fresh); renderRecords();
-        } catch (e) { if (!cached) document.getElementById('recContainer').innerHTML = '<div class="rec-empty">Помилка завантаження</div>'; }
-      }
-      function formatFsDate(iso) { // "2026-07-10" → "10.07.2026"
-        if (!iso) return ''; const p = iso.split('-'); return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : iso;
-      }
-      function parseDMY(s) { if (!s) return 0; const p = s.split('.'); return p.length === 3 ? new Date(+p[2], +p[1] - 1, +p[0]).getTime() : 0; }
-
-      // Знак запису для підрахунку балансу: Дохід +, Витрата -,
-      // Бізнес: категорія "Доходи" +, інші (Витрати/Податки) -
-      function recordSign(r) {
-        if (r._t === 'exp') return -1;
-        if (r._t === 'inc') return 1;
-        if (r._t === 'biz') return r.category === 'Доходи' ? 1 : -1;
-        return 1;
-      }
-      function filterRecs(f) {
-        rFilter = f; document.querySelectorAll('.fpill').forEach(p => p.classList.toggle('active', p.dataset.rf === f)); renderRecords();
-      }
-
-      function renderRecords() {
-        const con = document.getElementById('recContainer');
-        const recs = rFilter === 'all' ? allRecords : allRecords.filter(r => r._t === rFilter);
-        if (!recs.length) { con.innerHTML = '<div class="rec-empty">Записів немає</div>'; return; }
-
-        // Group by month
-        const groups = {};
-        recs.forEach((r, i) => {
-          const p = r.date.split('.');
-          const key = p.length === 3 ? `${p[2]}-${p[1].padStart(2, '0')}` : '0000-00';
-          const lbl = p.length === 3 ? `${MONTH_UK[+p[1] - 1] || p[1]} ${p[2]}` : r.date;
-          if (!groups[key]) groups[key] = { lbl, items: [] };
-          groups[key].items.push({ r, i });
+        const catDictName = addTab === 'exp' ? 'expenseCategories' : addTab === 'inc' ? 'incomeCategories' : 'businessCategories';
+        allRecords.unshift({
+          row: docRef.id, _t: addTab,
+          date: formatFsDate(date), amount: +amt,
+          categoryId: catId, category: resolveName(catDictName, catId),
+          descId, desc: resolveName(descDictName, descId),
+          subcategoryId, subcategory: resolveName('expenseSubcategories', subcategoryId),
+          currencyId, currency: cur,
+          usd: amountUSD, uah: addTab === 'biz' ? amountUAH : undefined
         });
-        const sorted = Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
-        // All months collapsed by default
+        cSet('records', allRecords);
 
-        con.innerHTML = sorted.map(([key, g]) => {
-          const isOpen = expandedMonths.has(key);
-          // Баланс у базовій валюті (K:K), а не сира сума в різних валютах.
-          // Дохід +, Витрати -, Бізнес: категорія "Доходи" +, інші (Витрати/Податки) -
-          const balance = g.items.reduce((s, { r }) => {
-            if (rFilter === 'all' && r._t === 'biz') return s; // Бізнес не входить у баланс вкладки "Всі"
-            return s + recordSign(r) * (+r.usd || 0);
-          }, 0);
-          const baseCur = settings?.mainCurrency || 'USD';
-          return `
+        showToast('✓ Збережено', 'ok'); afterSave(btn);
+      } catch (e) {
+        showToast('Помилка: ' + e.message, 'err');
+        btn.disabled = false; btn.textContent = TAB_CFG[addTab].label;
+      }
+    }
+
+    function afterSave(btn) {
+      document.getElementById('fAmt').value = ''; document.getElementById('fSubcat').value = ''; document.getElementById('fDesc').value = '';
+      btn.disabled = false; btn.textContent = TAB_CFG[addTab].label;
+      updateSyncBadge(); setTimeout(() => document.getElementById('fAmt').focus(), 150);
+    }
+
+    // ── Offline ──
+    function saveQueue() { localStorage.setItem('offlineQ', JSON.stringify(offlineQueue)); updateSyncBadge(); }
+    function updateSyncBadge() {
+      const total = offlineQueue.length + pendingRates.length;
+      const c = document.getElementById('syncCnt');
+      c.textContent = total; c.classList.toggle('show', total > 0);
+    }
+    async function resolvePendingRates() {
+      if (!navigator.onLine || !pendingRates.length) return;
+      const remaining = [];
+      for (const job of pendingRates) {
+        try {
+          const rateResp = await api({ action: 'getRateSync', currency: job.currency, to: 'USD', date: job.date });
+          const rateUSD = rateResp.rate || 1;
+          const update = { rateUSD, amountUSD: null, rateResolved: true };
+          // amountUSD рахуємо по фактичній сумі запису, а не заново запитуємо суму
+          const docSnap = await fbDb.collection(job.collection).doc(job.docId).get();
+          const amt = docSnap.exists ? docSnap.data().amount : 0;
+          update.amountUSD = amt * rateUSD;
+
+          if (job.isBusiness) {
+            const rateRespUAH = await api({ action: 'getRateSync', currency: job.currency, to: 'UAH', date: job.date });
+            update.rateUAH = rateRespUAH.rate || 1;
+            update.amountUAH = amt * update.rateUAH;
+          }
+
+          await fbDb.collection(job.collection).doc(job.docId).update(update);
+        } catch (e) {
+          remaining.push(job); // не вийшло — лишаємо в черзі, спробуємо наступного разу
+        }
+      }
+      pendingRates = remaining;
+      savePendingRates();
+      if (remaining.length === 0) showToast('✓ Курси розраховано', 'ok');
+    }
+
+    async function syncOffline() {
+      if (!navigator.onLine) { showToast('Немає з\'єднання', 'err'); return; }
+      if (!offlineQueue.length) { showToast('Нічого синхронізувати', 'info'); return; }
+      showToast(`Синхронізація ${offlineQueue.length} записів…`, 'info');
+      let ok = 0; const failed = [];
+      for (const item of offlineQueue) {
+        try {
+          const r = await api(item);
+          if (r.status === 'ok') { ok++; if (item.offline && r.row) api({ action: 'resolveOfflineRate', sheet: item.sheet, row: r.row, currency: item.currency, date: item.date }).catch(() => { }); }
+          else failed.push(item);
+        } catch (e) { failed.push(item); }
+      }
+      offlineQueue = failed; saveQueue(); cSet('records', null);
+      showToast(ok ? `✓ Синхронізовано: ${ok}${failed.length ? ', помилок: ' + failed.length : ''}` : 'Помилка', 'ok');
+    }
+    function updateOfflineBar() { document.getElementById('offlineBar').classList.toggle('show', !navigator.onLine); }
+
+    // ── Records ──
+    async function loadRecords() {
+      const cached = await cGet('records');
+      if (cached && Array.isArray(cached)) { allRecords = cached; renderRecords(); }
+      else document.getElementById('recContainer').innerHTML = '<div class="rec-empty">Завантаження…</div>';
+      if (!navigator.onLine) return;
+      try {
+        const fresh = [];
+
+        const expSnap = await fbDb.collection('expenses').where('status', '==', 'ACTIVE').get();
+        expSnap.forEach(doc => {
+          const d = doc.data();
+          fresh.push({
+            row: doc.id, _t: 'exp',
+            date: formatFsDate(d.date), amount: d.amount,
+            categoryId: d.categoryId, category: resolveName('expenseCategories', d.categoryId),
+            descId: d.descId, desc: resolveName('expenseDescriptions', d.descId),
+            subcategoryId: d.subcategoryId || '', subcategory: resolveName('expenseSubcategories', d.subcategoryId),
+            currencyId: d.currencyId, currency: currencyCodeOf(d.currencyId),
+            usd: d.amountUSD || 0
+          });
+        });
+
+        const incSnap = await fbDb.collection('income').where('status', '==', 'ACTIVE').get();
+        incSnap.forEach(doc => {
+          const d = doc.data();
+          fresh.push({
+            row: doc.id, _t: 'inc',
+            date: formatFsDate(d.date), amount: d.amount,
+            categoryId: d.categoryId, category: resolveName('incomeCategories', d.categoryId),
+            descId: d.descId, desc: resolveName('incomeDescriptions', d.descId),
+            currencyId: d.currencyId, currency: currencyCodeOf(d.currencyId),
+            usd: d.amountUSD || 0
+          });
+        });
+
+        const bizSnap = await fbDb.collection('business').where('status', '==', 'ACTIVE').get();
+        bizSnap.forEach(doc => {
+          const d = doc.data();
+          fresh.push({
+            row: doc.id, _t: 'biz',
+            date: formatFsDate(d.date), amount: d.amount,
+            categoryId: d.categoryId, category: resolveName('businessCategories', d.categoryId),
+            descId: d.descId, desc: resolveName('businessDescriptions', d.descId),
+            currencyId: d.currencyId, currency: currencyCodeOf(d.currencyId),
+            usd: d.amountUSD || 0, uah: d.amountUAH || 0
+          });
+        });
+
+        fresh.sort((a, b) => parseDMY(b.date) - parseDMY(a.date));
+        allRecords = fresh; await cSet('records', fresh); renderRecords();
+      } catch (e) { if (!cached) document.getElementById('recContainer').innerHTML = '<div class="rec-empty">Помилка завантаження</div>'; }
+    }
+    function formatFsDate(iso) { // "2026-07-10" → "10.07.2026"
+      if (!iso) return ''; const p = iso.split('-'); return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : iso;
+    }
+    function parseDMY(s) { if (!s) return 0; const p = s.split('.'); return p.length === 3 ? new Date(+p[2], +p[1] - 1, +p[0]).getTime() : 0; }
+
+    // Знак запису для підрахунку балансу: Дохід +, Витрата -,
+    // Бізнес: категорія "Доходи" +, інші (Витрати/Податки) -
+    function recordSign(r) {
+      if (r._t === 'exp') return -1;
+      if (r._t === 'inc') return 1;
+      if (r._t === 'biz') return r.category === 'Доходи' ? 1 : -1;
+      return 1;
+    }
+    function filterRecs(f) {
+      rFilter = f; document.querySelectorAll('.fpill').forEach(p => p.classList.toggle('active', p.dataset.rf === f)); renderRecords();
+    }
+
+    function renderRecords() {
+      const con = document.getElementById('recContainer');
+      const recs = rFilter === 'all' ? allRecords : allRecords.filter(r => r._t === rFilter);
+      if (!recs.length) { con.innerHTML = '<div class="rec-empty">Записів немає</div>'; return; }
+
+      // Group by month
+      const groups = {};
+      recs.forEach((r, i) => {
+        const p = r.date.split('.');
+        const key = p.length === 3 ? `${p[2]}-${p[1].padStart(2, '0')}` : '0000-00';
+        const lbl = p.length === 3 ? `${MONTH_UK[+p[1] - 1] || p[1]} ${p[2]}` : r.date;
+        if (!groups[key]) groups[key] = { lbl, items: [] };
+        groups[key].items.push({ r, i });
+      });
+      const sorted = Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
+      // All months collapsed by default
+
+      con.innerHTML = sorted.map(([key, g]) => {
+        const isOpen = expandedMonths.has(key);
+        // Баланс у базовій валюті (K:K), а не сира сума в різних валютах.
+        // Дохід +, Витрати -, Бізнес: категорія "Доходи" +, інші (Витрати/Податки) -
+        const balance = g.items.reduce((s, { r }) => {
+          if (rFilter === 'all' && r._t === 'biz') return s; // Бізнес не входить у баланс вкладки "Всі"
+          return s + recordSign(r) * (+r.usd || 0);
+        }, 0);
+        const baseCur = settings?.mainCurrency || 'USD';
+        return `
     <div class="month-group">
       <div class="month-hdr" onclick="toggleMonth('${key}')">
         <div class="month-hdr-left">
@@ -2079,452 +2067,431 @@
         </div>
       </div>
     </div>`;
-        }).join('');
+      }).join('');
 
-        // Long press → edit
-        con.querySelectorAll('.rec-item').forEach(el => {
-          el.addEventListener('touchstart', () => { lpTimer = setTimeout(() => openEdit(recs[+el.dataset.i]), 500); });
-          el.addEventListener('touchend', () => clearTimeout(lpTimer));
-          el.addEventListener('touchmove', () => clearTimeout(lpTimer));
-          el.addEventListener('contextmenu', e => { e.preventDefault(); openEdit(recs[+el.dataset.i]); });
-        });
+      // Long press → edit
+      con.querySelectorAll('.rec-item').forEach(el => {
+        el.addEventListener('touchstart', () => { lpTimer = setTimeout(() => openEdit(recs[+el.dataset.i]), 500); });
+        el.addEventListener('touchend', () => clearTimeout(lpTimer));
+        el.addEventListener('touchmove', () => clearTimeout(lpTimer));
+        el.addEventListener('contextmenu', e => { e.preventDefault(); openEdit(recs[+el.dataset.i]); });
+      });
+    }
+
+    function toggleMonth(key) {
+      if (expandedMonths.has(key)) { expandedMonths.delete(key); } else { expandedMonths.add(key); }
+      const body = document.getElementById('mb-' + key);
+      const arrow = body?.previousElementSibling?.querySelector('.month-arrow');
+      if (body) { body.classList.toggle('open', expandedMonths.has(key)); }
+      if (arrow) { arrow.classList.toggle('open', expandedMonths.has(key)); }
+    }
+
+    // ── Edit Modal ──
+    function openEdit(rec) {
+      editRec = rec;
+      const lbl = rec._t === 'exp' ? 'Витрата' : rec._t === 'inc' ? 'Дохід' : 'Бізнес';
+      document.getElementById('editTitle').textContent = `${lbl} · ${rec.date}`;
+      document.getElementById('eDate').value = rec.date.split('.').reverse().join('-');
+      document.getElementById('eAmt').value = rec.amount;
+
+      buildSel('eCat', cats(rec._t), rec.categoryId);
+
+      const curs = getCurs();
+      const eCur = document.getElementById('eCur');
+      const eCurOther = document.getElementById('eCurOther');
+      let curOptions = curs.map(c => `<option value="${c.id}"${c.id === rec.currencyId ? ' selected' : ''}>${c.code}</option>`).join('');
+      curOptions += `<option value="__other__">Інша валюта…</option>`;
+      eCur.innerHTML = curOptions;
+      const knownIds = curs.map(c => c.id);
+      if (!knownIds.includes(rec.currencyId)) {
+        eCur.value = '__other__';
+        eCurOther.value = rec.currency || '';
+        eCurOther.classList.add('show');
+      } else {
+        eCurOther.value = '';
+        eCurOther.classList.remove('show');
       }
 
-      function toggleMonth(key) {
-        if (expandedMonths.has(key)) { expandedMonths.delete(key); } else { expandedMonths.add(key); }
-        const body = document.getElementById('mb-' + key);
-        const arrow = body?.previousElementSibling?.querySelector('.month-arrow');
-        if (body) { body.classList.toggle('open', expandedMonths.has(key)); }
-        if (arrow) { arrow.classList.toggle('open', expandedMonths.has(key)); }
-      }
+      document.getElementById('eDesc').value = rec.desc || '';
+      document.getElementById('eDescDrop').classList.remove('show');
 
-      // ── Edit Modal ──
-      function openEdit(rec) {
-        editRec = rec;
-        const lbl = rec._t === 'exp' ? 'Витрата' : rec._t === 'inc' ? 'Дохід' : 'Бізнес';
-        document.getElementById('editTitle').textContent = `${lbl} · ${rec.date}`;
-        document.getElementById('eDate').value = rec.date.split('.').reverse().join('-');
-        document.getElementById('eAmt').value = rec.amount;
+      resetSubcatFieldEdit();
+      document.getElementById('eSubcatField').style.display = rec._t === 'exp' ? '' : 'none';
+      document.getElementById('eSubcat').value = rec.subcategory || '';
+      document.getElementById('eSubcatDrop').classList.remove('show');
 
-        buildSel('eCat', cats(rec._t), rec.categoryId);
+      const btn = document.getElementById('editSaveBtn');
+      btn.className = 'save-btn ' + rec._t; btn.textContent = 'Зберегти зміни';
+      document.getElementById('editOv').classList.add('show');
+    }
+    function closeEdit() { document.getElementById('editOv').classList.remove('show'); editRec = null; }
+    function onEditCurChange() {
+      const sel = document.getElementById('eCur').value;
+      const other = document.getElementById('eCurOther');
+      if (sel === '__other__') { other.classList.add('show'); other.focus(); }
+      else { other.classList.remove('show'); }
+    }
+    function editActiveCur() {
+      const sel = document.getElementById('eCur').value;
+      return sel === '__other__' ? document.getElementById('eCurOther').value.trim().toUpperCase() : sel;
+    }
+    async function saveEdit() {
+      if (!editRec) return;
+      const currency = editActiveCur();
+      if (!currency) { showToast('Вкажіть валюту', 'err'); return; }
+      const btn = document.getElementById('editSaveBtn');
+      btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Збереження…';
 
-        const curs = getCurs();
-        const eCur = document.getElementById('eCur');
-        const eCurOther = document.getElementById('eCurOther');
-        let curOptions = curs.map(c => `<option value="${c.id}"${c.id === rec.currencyId ? ' selected' : ''}>${c.code}</option>`).join('');
-        curOptions += `<option value="__other__">Інша валюта…</option>`;
-        eCur.innerHTML = curOptions;
-        const knownIds = curs.map(c => c.id);
-        if (!knownIds.includes(rec.currencyId)) {
-          eCur.value = '__other__';
-          eCurOther.value = rec.currency || '';
-          eCurOther.classList.add('show');
-        } else {
-          eCurOther.value = '';
-          eCurOther.classList.remove('show');
+      const isoDate = document.getElementById('eDate').value;
+      const dispDate = isoDate.split('-').reverse().join('.');
+      const catId = document.getElementById('eCat').value;
+      const amount = +document.getElementById('eAmt').value;
+      const descText = document.getElementById('eDesc').value.trim();
+      const subcatText = document.getElementById('eSubcat').value.trim();
+      const collection = editRec._t === 'exp' ? 'expenses' : editRec._t === 'inc' ? 'income' : 'business';
+
+      try {
+        const eCurSel = document.getElementById('eCur').value;
+        const currencyId = eCurSel === '__other__' ? await resolveOrCreateCurrency(currency) : eCurSel;
+
+        const descDictName = editRec._t === 'exp' ? 'expenseDescriptions' : editRec._t === 'inc' ? 'incomeDescriptions' : 'businessDescriptions';
+        const descPrefix = editRec._t === 'exp' ? 'ExDsc' : editRec._t === 'inc' ? 'InDsc' : 'BzDsc';
+        const descId = descText ? await resolveOrCreate(descDictName, descPrefix, descText) : '';
+
+        const subcategoryId = (editRec._t === 'exp' && subcatText) ? await resolveOrCreate('expenseSubcategories', 'ExSub', subcatText) : '';
+
+        const rateResp = await api({ action: 'getRateSync', currency, to: 'USD', date: isoDate });
+        const rateUSD = rateResp.rate || 1;
+        const amountUSD = amount * rateUSD;
+
+        const updateData = {
+          date: dispDate, categoryId, amount, currencyId, descId,
+          subcategoryId,
+          rateUSD, amountUSD,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        let amountUAH = null;
+        if (editRec._t === 'biz') {
+          const rateRespUAH = await api({ action: 'getRateSync', currency, to: 'UAH', date: isoDate });
+          const rateUAH = rateRespUAH.rate || 1;
+          updateData.rateUAH = rateUAH;
+          amountUAH = amount * rateUAH;
+          updateData.amountUAH = amountUAH;
         }
 
-        document.getElementById('eDesc').value = rec.desc || '';
-        document.getElementById('eDescDrop').classList.remove('show');
+        await fbDb.collection(collection).doc(editRec.row).update(updateData);
 
-        resetSubcatFieldEdit();
-        document.getElementById('eSubcatField').style.display = rec._t === 'exp' ? '' : 'none';
-        document.getElementById('eSubcat').value = rec.subcategory || '';
-        document.getElementById('eSubcatDrop').classList.remove('show');
-
-        const btn = document.getElementById('editSaveBtn');
-        btn.className = 'save-btn ' + rec._t; btn.textContent = 'Зберегти зміни';
-        document.getElementById('editOv').classList.add('show');
-      }
-      function closeEdit() { document.getElementById('editOv').classList.remove('show'); editRec = null; }
-      function onEditCurChange() {
-        const sel = document.getElementById('eCur').value;
-        const other = document.getElementById('eCurOther');
-        if (sel === '__other__') { other.classList.add('show'); other.focus(); }
-        else { other.classList.remove('show'); }
-      }
-      function editActiveCur() {
-        const sel = document.getElementById('eCur').value;
-        return sel === '__other__' ? document.getElementById('eCurOther').value.trim().toUpperCase() : sel;
-      }
-      async function saveEdit() {
-        if (!editRec) return;
-        const currency = editActiveCur();
-        if (!currency) { showToast('Вкажіть валюту', 'err'); return; }
-        const btn = document.getElementById('editSaveBtn');
-        btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Збереження…';
-
-        const isoDate = document.getElementById('eDate').value;
-        const dispDate = isoDate.split('-').reverse().join('.');
-        const catId = document.getElementById('eCat').value;
-        const amount = +document.getElementById('eAmt').value;
-        const descText = document.getElementById('eDesc').value.trim();
-        const subcatText = document.getElementById('eSubcat').value.trim();
-        const collection = editRec._t === 'exp' ? 'expenses' : editRec._t === 'inc' ? 'income' : 'business';
-
-        try {
-          const eCurSel = document.getElementById('eCur').value;
-          const currencyId = eCurSel === '__other__' ? await resolveOrCreateCurrency(currency) : eCurSel;
-
-          const descDictName = editRec._t === 'exp' ? 'expenseDescriptions' : editRec._t === 'inc' ? 'incomeDescriptions' : 'businessDescriptions';
-          const descPrefix = editRec._t === 'exp' ? 'ExDsc' : editRec._t === 'inc' ? 'InDsc' : 'BzDsc';
-          const descInsheId = editRec._t === 'exp' ? 'ExDsc_INSHE' : editRec._t === 'inc' ? 'InDsc_INSHE' : 'BzDsc_INSHE';
-          let descId = descText ? await resolveOrCreate(descDictName, descPrefix, descText) : descInsheId;
-
-          if (descText && descId !== descInsheId) {
-            const mapDictName = editRec._t === 'exp' ? 'expenseCategoryDescriptions' : editRec._t === 'inc' ? 'incomeCategoryDescriptions' : 'businessCategoryDescriptions';
-            const currentList = dictionaries[mapDictName]?.[catId] || [];
-            if (!currentList.includes(descId)) {
-              const newList = [...currentList, descId];
-              await fbDb.collection('dictionaries').doc(mapDictName).set({ [catId]: newList }, { merge: true });
-              if (!dictionaries[mapDictName]) dictionaries[mapDictName] = {};
-              dictionaries[mapDictName][catId] = newList;
-            }
-          }
-
-          let subcategoryId = 'ExSub_INSHE';
-          if (editRec._t === 'exp' && subcatText) {
-            subcategoryId = await resolveOrCreate('expenseSubcategories', 'ExSub', subcatText);
-            const currentSubs = dictionaries.expenseCategorySubcategories?.[catId] || [];
-            if (!currentSubs.includes(subcategoryId) && currentSubs.length < 5) {
-              const newSubs = [...currentSubs, subcategoryId];
-              await fbDb.collection('dictionaries').doc('expenseCategorySubcategories').set({ [catId]: newSubs }, { merge: true });
-              if (!dictionaries.expenseCategorySubcategories) dictionaries.expenseCategorySubcategories = {};
-              dictionaries.expenseCategorySubcategories[catId] = newSubs;
-            }
-          }
-          const rateResp = await api({ action: 'getRateSync', currency, to: 'USD', date: isoDate });
-          const rateUSD = rateResp.rate || 1;
-          const amountUSD = amount * rateUSD;
-
-          const updateData = {
-            date: dispDate, categoryId, amount, currencyId, descId,
-            subcategoryId,
-            rateUSD, amountUSD,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        showToast('✓ Збережено', 'ok');
+        const catDictName = editRec._t === 'exp' ? 'expenseCategories' : editRec._t === 'inc' ? 'incomeCategories' : 'businessCategories';
+        const idx = allRecords.findIndex(r => r.row === editRec.row && r._t === editRec._t);
+        if (idx !== -1) {
+          allRecords[idx] = {
+            ...allRecords[idx],
+            date: dispDate, amount,
+            categoryId, category: resolveName(catDictName, catId),
+            descId, desc: resolveName(descDictName, descId),
+            subcategoryId, subcategory: resolveName('expenseSubcategories', subcategoryId),
+            currencyId, currency,
+            usd: amountUSD, uah: amountUAH !== null ? amountUAH : allRecords[idx].uah
           };
-
-          let amountUAH = null;
-          if (editRec._t === 'biz') {
-            const rateRespUAH = await api({ action: 'getRateSync', currency, to: 'UAH', date: isoDate });
-            const rateUAH = rateRespUAH.rate || 1;
-            updateData.rateUAH = rateUAH;
-            amountUAH = amount * rateUAH;
-            updateData.amountUAH = amountUAH;
-          }
-
-          await fbDb.collection(collection).doc(editRec.row).update(updateData);
-
-          showToast('✓ Збережено', 'ok');
-          const catDictName = editRec._t === 'exp' ? 'expenseCategories' : editRec._t === 'inc' ? 'incomeCategories' : 'businessCategories';
-          const idx = allRecords.findIndex(r => r.row === editRec.row && r._t === editRec._t);
-          if (idx !== -1) {
-            allRecords[idx] = {
-              ...allRecords[idx],
-              date: dispDate, amount,
-              categoryId, category: resolveName(catDictName, catId),
-              descId, desc: resolveName(descDictName, descId),
-              subcategoryId, subcategory: resolveName('expenseSubcategories', subcategoryId),
-              currencyId, currency,
-              usd: amountUSD, uah: amountUAH !== null ? amountUAH : allRecords[idx].uah
-            };
-            cSet('records', allRecords);
-          }
-          closeEdit(); renderRecords();
-        } catch (e) { showToast('Помилка: ' + e.message, 'err'); }
-        btn.disabled = false; btn.textContent = 'Зберегти зміни';
-      }
-
-      async function doDelete() {
-        if (!editRec) return;
-        const rec = editRec; closeEdit();
-        const collection = rec._t === 'exp' ? 'expenses' : rec._t === 'inc' ? 'income' : 'business';
-        try {
-          await fbDb.collection(collection).doc(rec.row).update({
-            status: 'DELETED',
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-          });
-          allRecords = allRecords.filter(r => !(r.row === rec.row && r._t === rec._t));
-          cSet('records', allRecords); renderRecords(); showToast('🗑 Видалено', 'ok');
-        } catch (e) { showToast('Помилка: ' + e.message, 'err'); }
-      }
-
-      // ── Analytics — обчислюється локально з allRecords (миттєво, офлайн) ──
-      function loadCachedAnFilters() {
-        try { const c = localStorage.getItem('anFiltersCache'); return c ? JSON.parse(c) : null; } catch (e) { return null; }
-      }
-      function saveCachedAnFilters() {
-        try { localStorage.setItem('anFiltersCache', JSON.stringify(anFilters)); } catch (e) { }
-      }
-      async function initAnalytics() {
-        setSlide(0);
-        ['slide0', 'slide1', 'slide2'].forEach(id => { document.getElementById(id).innerHTML = '<div class="chart-loading">Завантаження…</div>'; });
-        await ensureRecordsLoaded();
-        const cached = loadCachedAnFilters();
-        if (cached) {
-          anFilters = cached; // миттєво, без запиту до сервера
-        } else {
-          // Лише один раз (перший запуск) — підтягуємо дефолти з листів Sheets
-          try {
-            const fr = await api({ action: 'getFilters' });
-            if (fr.status === 'ok') anFilters = fr;
-          } catch (e) {/* офлайн — дефолти нижче */ }
+          cSet('records', allRecords);
         }
-        ensureFilterDefaults();
-        buildFilterUi();
-        renderAnTab(anTab);
-        saveCachedAnFilters();
-      }
-      async function ensureRecordsLoaded() {
-        if (allRecords.length) return;
-        const cached = await cGet('records');
-        if (cached && Array.isArray(cached) && cached.length) { allRecords = cached; return; }
-        await loadRecords();
-      }
-      function ensureFilterDefaults() {
-        const now = new Date();
-        const curMonth = MONTH_UK[now.getMonth()], curYear = now.getFullYear();
-        const firstCat = (settings?.expenseCategories || [])[0] || '';
-        if (!anFilters.monthly || !anFilters.monthly.month) anFilters.monthly = { month: curMonth, year: curYear, category: firstCat };
-        if (!anFilters.annual || !anFilters.annual.month) anFilters.annual = { month: curMonth, year: curYear };
-        if (!anFilters.analyz || !anFilters.analyz.month) anFilters.analyz = { month: curMonth, year: curYear, category: firstCat };
-      }
-      function setSlideErr(m) { ['slide0', 'slide1', 'slide2'].forEach(id => { document.getElementById(id).innerHTML = `<div class="chart-loading">${m}</div>`; }); }
-      function switchAnTab(t) {
-        anTab = t;
-        document.querySelectorAll('#analyticsTabs .tab').forEach(el => el.classList.toggle('active', el.dataset.t === t));
-        document.getElementById('filtersMonthly').style.display = t === 'monthly' ? '' : 'none';
-        document.getElementById('filtersAnnual').style.display = t === 'annual' ? '' : 'none';
-        document.getElementById('filtersAnalyz').style.display = t === 'analyz' ? '' : 'none';
-        setSlide(0);
-        renderAnTab(t);
-      }
-      function buildFilterUi() {
-        const months = getMonths(), years = getYears(), expCats = settings?.expenseCategories || [];
-        const fm = anFilters.monthly || {}, fa = anFilters.annual || {}, fn = anFilters.analyz || {};
-        function mSel(id, cur) { document.getElementById(id).innerHTML = months.map(m => `<option${m === cur ? ' selected' : ''}>${m}</option>`).join(''); }
-        function ySel(id, cur) { document.getElementById(id).innerHTML = years.map(y => `<option${String(y) === String(cur) ? ' selected' : ''}>${y}</option>`).join(''); }
-        function cSel(id, cur) { document.getElementById(id).innerHTML = expCats.map(c => `<option value="${x(c)}"${c === cur ? ' selected' : ''}>${x(c)}</option>`).join(''); }
-        mSel('fMonthlyMonth', fm.month); ySel('fMonthlyYear', fm.year); cSel('fMonthlyCategory', fm.category);
-        mSel('fAnnualMonth', fa.month); ySel('fAnnualYear', fa.year);
-        mSel('fAnalyzMonth', fn.month); ySel('fAnalyzYear', fn.year); cSel('fAnalyzCategory', fn.category);
-      }
-      // Натискання "OK" — миттєвий локальний перерахунок, без звернень до сервера.
-      // Слайд НЕ скидається — лишається та сама діаграма, просто оновлена.
-      function applyFilter(t) {
-        if (t === 'monthly') {
-          anFilters.monthly = { month: document.getElementById('fMonthlyMonth').value, year: document.getElementById('fMonthlyYear').value, category: document.getElementById('fMonthlyCategory').value };
-        } else if (t === 'annual') {
-          anFilters.annual = { month: document.getElementById('fAnnualMonth').value, year: document.getElementById('fAnnualYear').value };
-        } else {
-          anFilters.analyz = { month: document.getElementById('fAnalyzMonth').value, year: document.getElementById('fAnalyzYear').value, category: document.getElementById('fAnalyzCategory').value };
-        }
-        saveCachedAnFilters();
-        renderAnTab(t);
-      }
-      function renderAnTab(t) {
-        try {
-          let data;
-          if (t === 'monthly') {
-            data = computeMonthlyData(
-              document.getElementById('fMonthlyMonth').value,
-              document.getElementById('fMonthlyYear').value,
-              document.getElementById('fMonthlyCategory').value
-            );
-          } else if (t === 'annual') {
-            data = computeAnnualData(
-              document.getElementById('fAnnualMonth').value,
-              document.getElementById('fAnnualYear').value
-            );
-          } else {
-            data = computeAnalyzData(
-              document.getElementById('fAnalyzMonth').value,
-              document.getElementById('fAnalyzYear').value,
-              document.getElementById('fAnalyzCategory').value
-            );
-          }
-          renderCharts(t, data);
-        } catch (e) { setSlideErr('Помилка: ' + e.message); }
-      }
+        closeEdit(); renderRecords();
+      } catch (e) { showToast('Помилка: ' + e.message, 'err'); }
+      btn.disabled = false; btn.textContent = 'Зберегти зміни';
+    }
 
-      // ── Локальна агрегація даних для діаграм (замість читання Diagram-листів) ──
-      function parseDMYParts(s) { if (!s) return null; const p = s.split('.'); return p.length === 3 ? { d: +p[0], m: +p[1], y: +p[2] } : null; }
-      function usdOf(r) { return +r.usd || 0; }
-
-      // 12 місяців поспіль починаючи з (startMonthName, startYear) —
-      // саме так побудовані Annual Overview і Аналіз у вашому Sheet
-      function rollingMonths(startMonthName, startYear) {
-        const startIdx = MONTH_UK.indexOf(startMonthName);
-        const out = [];
-        for (let i = 0; i < 12; i++) {
-          const idx = (startIdx + i) % 12;
-          const yearOffset = Math.floor((startIdx + i) / 12);
-          out.push({ name: MONTH_UK[idx], year: +startYear + yearOffset });
-        }
-        return out;
-      }
-
-      function groupSum(records, field) {
-        const map = {};
-        records.forEach(r => { const k = r[field] || '—'; map[k] = (map[k] || 0) + usdOf(r); });
-        return Object.entries(map).filter(([, v]) => v !== 0).sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, v]);
-      }
-
-      function computeMonthlyData(monthName, year, category) {
-        const mIdx = MONTH_UK.indexOf(monthName);
-        const match = r => { const p = parseDMYParts(r.date); return p && p.m - 1 === mIdx && p.y === +year; };
-        const inc = allRecords.filter(r => r._t === 'inc' && match(r));
-        const exp = allRecords.filter(r => r._t === 'exp' && match(r));
-        const sub = exp.filter(r => r.category === category);
-        return {
-          income: { rows: groupSum(inc, 'category') },
-          expenses: { rows: groupSum(exp, 'category'), stack: buildCategoryStack(exp) },
-          subcat: { rows: groupSum(sub, 'desc'), subcatSummary: groupSum(sub.filter(r => r.subcategory), 'subcategory') }
-        };
-      }
-
-      function buildCategoryStack(records) {
-        const cats = [...new Set(records.map(r => r.category))];
-        return cats.map(cat => {
-          const items = records.filter(r => r.category === cat);
-          const map = {};
-          items.forEach(r => {
-            const k = r.subcategory ? r.subcategory : 'Без підкатегорії';
-            map[k] = (map[k] || 0) + usdOf(r);
-          });
-          return { category: cat, segments: Object.entries(map).sort((a, b) => b[1] - a[1]) };
-        }).filter(c => c.segments.reduce((s, [, v]) => s + v, 0) > 0)
-          .sort((a, b) => b.segments.reduce((s, [, v]) => s + v, 0) - a.segments.reduce((s, [, v]) => s + v, 0));
-      }
-
-      function computeAnnualData(startMonthName, startYear) {
-        const months = rollingMonths(startMonthName, startYear);
-        function monthPos(r) {
-          const p = parseDMYParts(r.date); if (!p) return -1;
-          return months.findIndex(mm => mm.year === p.y && MONTH_UK.indexOf(mm.name) === p.m - 1);
-        }
-        const incByMonth = months.map(() => 0), expByMonth = months.map(() => 0);
-        allRecords.forEach(r => {
-          if (r._t !== 'inc' && r._t !== 'exp') return;
-          const pos = monthPos(r); if (pos === -1) return;
-          if (r._t === 'inc') incByMonth[pos] += usdOf(r); else expByMonth[pos] += usdOf(r);
+    async function doDelete() {
+      if (!editRec) return;
+      const rec = editRec; closeEdit();
+      const collection = rec._t === 'exp' ? 'expenses' : rec._t === 'inc' ? 'income' : 'business';
+      try {
+        await fbDb.collection(collection).doc(rec.row).update({
+          status: 'DELETED',
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-        const balByMonth = incByMonth.map((v, i) => v - expByMonth[i]);
-        const headers = ['Категорія', '', ...months.map(m => m.name)];
-        const balance = { headers, rows: [['Дохід', '', ...incByMonth], ['Витрати', '', ...expByMonth], ['Баланс', '', ...balByMonth]] };
+        allRecords = allRecords.filter(r => !(r.row === rec.row && r._t === rec._t));
+        cSet('records', allRecords); renderRecords(); showToast('🗑 Видалено', 'ok');
+      } catch (e) { showToast('Помилка: ' + e.message, 'err'); }
+    }
 
-        function grid(type) {
-          const cats = type === 'exp' ? (settings?.expenseCategoriesOrder || []) : (settings?.incomeCategoriesOrder || []);
-          const rows = cats.map(cat => {
-            const vals = months.map(() => 0);
-            allRecords.forEach(r => {
-              if (r._t !== type || r.category !== cat) return;
-              const pos = monthPos(r); if (pos === -1) return;
-              vals[pos] += usdOf(r);
-            });
-            return [cat, '', ...vals];
-          });
-          return { headers, rows };
-        }
-        return { balance, expenses: grid('exp'), income: grid('inc') };
+    // ── Analytics — обчислюється локально з allRecords (миттєво, офлайн) ──
+    function loadCachedAnFilters() {
+      try { const c = localStorage.getItem('anFiltersCache'); return c ? JSON.parse(c) : null; } catch (e) { return null; }
+    }
+    function saveCachedAnFilters() {
+      try { localStorage.setItem('anFiltersCache', JSON.stringify(anFilters)); } catch (e) { }
+    }
+    async function initAnalytics() {
+      setSlide(0);
+      ['slide0', 'slide1', 'slide2'].forEach(id => { document.getElementById(id).innerHTML = '<div class="chart-loading">Завантаження…</div>'; });
+      await ensureRecordsLoaded();
+      const cached = loadCachedAnFilters();
+      if (cached) {
+        anFilters = cached; // миттєво, без запиту до сервера
+      } else {
+        // Лише один раз (перший запуск) — підтягуємо дефолти з листів Sheets
+        try {
+          const fr = await api({ action: 'getFilters' });
+          if (fr.status === 'ok') anFilters = fr;
+        } catch (e) {/* офлайн — дефолти нижче */ }
       }
-
-      function computeAnalyzData(startMonthName, startYear, category) {
-        const thisMonths = rollingMonths(startMonthName, startYear);
-        const prevMonths = rollingMonths(startMonthName, +startYear - 1);
-        function inSet(r, monthsSet) {
-          const p = parseDMYParts(r.date); if (!p) return false;
-          return monthsSet.some(mm => mm.year === p.y && MONTH_UK.indexOf(mm.name) === p.m - 1);
-        }
-        function sumByCategory(type, monthsSet) {
-          const map = {};
-          allRecords.forEach(r => { if (r._t !== type || !inSet(r, monthsSet)) return; map[r.category] = (map[r.category] || 0) + usdOf(r); });
-          return map;
-        }
-        function sumByDesc(type, monthsSet, cat) {
-          const map = {};
-          allRecords.forEach(r => { if (r._t !== type || r.category !== cat || !inSet(r, monthsSet)) return; const k = r.desc || '—'; map[k] = (map[k] || 0) + usdOf(r); });
-          return map;
-        }
-        function combine(mapThis, mapPrev) {
-          const keys = new Set([...Object.keys(mapThis), ...Object.keys(mapPrev)]);
-          return [...keys].map(k => [k, '', mapThis[k] || 0, mapPrev[k] || 0]).filter(r => r[2] || r[3]).sort((a, b) => (b[2] + b[3]) - (a[2] + a[3]));
-        }
-        const expThis = sumByCategory('exp', thisMonths), expPrev = sumByCategory('exp', prevMonths);
-        const incThis = sumByCategory('inc', thisMonths), incPrev = sumByCategory('inc', prevMonths);
-        const subThis = sumByDesc('exp', thisMonths, category), subPrev = sumByDesc('exp', prevMonths, category);
-        function sumSubcatByYear(monthsSet) {
-          const map = {};
-          allRecords.forEach(r => {
-            if (r._t !== 'exp' || r.category !== category || !r.subcategory || !inSet(r, monthsSet)) return;
-            map[r.subcategory] = (map[r.subcategory] || 0) + usdOf(r);
-          });
-          return map;
-        }
-        const subcatThis = sumSubcatByYear(thisMonths);
-        const subcatPrev = sumSubcatByYear(prevMonths);
-        const subcatSummary = combine(subcatThis, subcatPrev); // [[назва,'',цейРік,минРік], ...]
-        return {
-          expenses: { rows: combine(expThis, expPrev) },
-          income: { rows: combine(incThis, incPrev) },
-          subcat: { rows: combine(subThis, subPrev), subcatSummary }
-        };
+      ensureFilterDefaults();
+      buildFilterUi();
+      renderAnTab(anTab);
+      saveCachedAnFilters();
+    }
+    async function ensureRecordsLoaded() {
+      if (allRecords.length) return;
+      const cached = await cGet('records');
+      if (cached && Array.isArray(cached) && cached.length) { allRecords = cached; return; }
+      await loadRecords();
+    }
+    function ensureFilterDefaults() {
+      const now = new Date();
+      const curMonth = MONTH_UK[now.getMonth()], curYear = now.getFullYear();
+      const firstCat = (settings?.expenseCategories || [])[0] || '';
+      if (!anFilters.monthly || !anFilters.monthly.month) anFilters.monthly = { month: curMonth, year: curYear, category: firstCat };
+      if (!anFilters.annual || !anFilters.annual.month) anFilters.annual = { month: curMonth, year: curYear };
+      if (!anFilters.analyz || !anFilters.analyz.month) anFilters.analyz = { month: curMonth, year: curYear, category: firstCat };
+    }
+    function setSlideErr(m) { ['slide0', 'slide1', 'slide2'].forEach(id => { document.getElementById(id).innerHTML = `<div class="chart-loading">${m}</div>`; }); }
+    function switchAnTab(t) {
+      anTab = t;
+      document.querySelectorAll('#analyticsTabs .tab').forEach(el => el.classList.toggle('active', el.dataset.t === t));
+      document.getElementById('filtersMonthly').style.display = t === 'monthly' ? '' : 'none';
+      document.getElementById('filtersAnnual').style.display = t === 'annual' ? '' : 'none';
+      document.getElementById('filtersAnalyz').style.display = t === 'analyz' ? '' : 'none';
+      setSlide(0);
+      renderAnTab(t);
+    }
+    function buildFilterUi() {
+      const months = getMonths(), years = getYears(), expCats = settings?.expenseCategories || [];
+      const fm = anFilters.monthly || {}, fa = anFilters.annual || {}, fn = anFilters.analyz || {};
+      function mSel(id, cur) { document.getElementById(id).innerHTML = months.map(m => `<option${m === cur ? ' selected' : ''}>${m}</option>`).join(''); }
+      function ySel(id, cur) { document.getElementById(id).innerHTML = years.map(y => `<option${String(y) === String(cur) ? ' selected' : ''}>${y}</option>`).join(''); }
+      function cSel(id, cur) { document.getElementById(id).innerHTML = expCats.map(c => `<option value="${x(c)}"${c === cur ? ' selected' : ''}>${x(c)}</option>`).join(''); }
+      mSel('fMonthlyMonth', fm.month); ySel('fMonthlyYear', fm.year); cSel('fMonthlyCategory', fm.category);
+      mSel('fAnnualMonth', fa.month); ySel('fAnnualYear', fa.year);
+      mSel('fAnalyzMonth', fn.month); ySel('fAnalyzYear', fn.year); cSel('fAnalyzCategory', fn.category);
+    }
+    // Натискання "OK" — миттєвий локальний перерахунок, без звернень до сервера.
+    // Слайд НЕ скидається — лишається та сама діаграма, просто оновлена.
+    function applyFilter(t) {
+      if (t === 'monthly') {
+        anFilters.monthly = { month: document.getElementById('fMonthlyMonth').value, year: document.getElementById('fMonthlyYear').value, category: document.getElementById('fMonthlyCategory').value };
+      } else if (t === 'annual') {
+        anFilters.annual = { month: document.getElementById('fAnnualMonth').value, year: document.getElementById('fAnnualYear').value };
+      } else {
+        anFilters.analyz = { month: document.getElementById('fAnalyzMonth').value, year: document.getElementById('fAnalyzYear').value, category: document.getElementById('fAnalyzCategory').value };
       }
-
-      // ── Charts ──
-      function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
-      function cardWrap(title, inner, autoHeight = false) {
-        const d = document.createElement('div');
-        d.className = autoHeight ? 'chart-card-auto' : 'chart-card';
-        d.innerHTML = `<div class="chart-title">${title}</div>`; d.appendChild(inner); return d;
-      }
-      function fillCanvas(id) {
-        const wrap = document.createElement('div'); wrap.className = 'chart-fill';
-        const c = document.createElement('canvas'); c.id = id; wrap.appendChild(c); return { wrap, c };
-      }
-
-      function renderCharts(t, data) {
-        Object.keys(charts).forEach(id => destroyChart(id));
+      saveCachedAnFilters();
+      renderAnTab(t);
+    }
+    function renderAnTab(t) {
+      try {
+        let data;
         if (t === 'monthly') {
-          put('slide0', () => makeHBar1('cME', 'Витрати по категоріях', data.expenses, 'exp'));
-          put('slide1', () => {
-            const container = document.createElement('div');
-            container.style.cssText = 'display:flex;flex-direction:column;gap:12px;flex:1;min-height:0';
-            const summary = data.subcat.subcatSummary || [];
-            if (summary.length) {
-              const listCard = document.createElement('div');
-              listCard.className = 'chart-card';
-              listCard.style.flex = '0 0 auto';
-              listCard.innerHTML = `<div class="chart-title">Суми по підкатегоріях</div>
+          data = computeMonthlyData(
+            document.getElementById('fMonthlyMonth').value,
+            document.getElementById('fMonthlyYear').value,
+            document.getElementById('fMonthlyCategory').value
+          );
+        } else if (t === 'annual') {
+          data = computeAnnualData(
+            document.getElementById('fAnnualMonth').value,
+            document.getElementById('fAnnualYear').value
+          );
+        } else {
+          data = computeAnalyzData(
+            document.getElementById('fAnalyzMonth').value,
+            document.getElementById('fAnalyzYear').value,
+            document.getElementById('fAnalyzCategory').value
+          );
+        }
+        renderCharts(t, data);
+      } catch (e) { setSlideErr('Помилка: ' + e.message); }
+    }
+
+    // ── Локальна агрегація даних для діаграм (замість читання Diagram-листів) ──
+    function parseDMYParts(s) { if (!s) return null; const p = s.split('.'); return p.length === 3 ? { d: +p[0], m: +p[1], y: +p[2] } : null; }
+    function usdOf(r) { return +r.usd || 0; }
+
+    // 12 місяців поспіль починаючи з (startMonthName, startYear) —
+    // саме так побудовані Annual Overview і Аналіз у вашому Sheet
+    function rollingMonths(startMonthName, startYear) {
+      const startIdx = MONTH_UK.indexOf(startMonthName);
+      const out = [];
+      for (let i = 0; i < 12; i++) {
+        const idx = (startIdx + i) % 12;
+        const yearOffset = Math.floor((startIdx + i) / 12);
+        out.push({ name: MONTH_UK[idx], year: +startYear + yearOffset });
+      }
+      return out;
+    }
+
+    function groupSum(records, field) {
+      const map = {};
+      records.forEach(r => { const k = r[field] || '—'; map[k] = (map[k] || 0) + usdOf(r); });
+      return Object.entries(map).filter(([, v]) => v !== 0).sort((a, b) => b[1] - a[1]).map(([k, v]) => [k, v]);
+    }
+
+    function computeMonthlyData(monthName, year, category) {
+      const mIdx = MONTH_UK.indexOf(monthName);
+      const match = r => { const p = parseDMYParts(r.date); return p && p.m - 1 === mIdx && p.y === +year; };
+      const inc = allRecords.filter(r => r._t === 'inc' && match(r));
+      const exp = allRecords.filter(r => r._t === 'exp' && match(r));
+      const sub = exp.filter(r => r.category === category);
+      return {
+        income: { rows: groupSum(inc, 'category') },
+        expenses: { rows: groupSum(exp, 'category'), stack: buildCategoryStack(exp) },
+        subcat: { rows: groupSum(sub, 'desc'), subcatSummary: groupSum(sub.filter(r => r.subcategory), 'subcategory') }
+      };
+    }
+
+    function buildCategoryStack(records) {
+      const cats = [...new Set(records.map(r => r.category))];
+      return cats.map(cat => {
+        const items = records.filter(r => r.category === cat);
+        const map = {};
+        items.forEach(r => {
+          const k = r.subcategory ? r.subcategory : 'Без підкатегорії';
+          map[k] = (map[k] || 0) + usdOf(r);
+        });
+        return { category: cat, segments: Object.entries(map).sort((a, b) => b[1] - a[1]) };
+      }).filter(c => c.segments.reduce((s, [, v]) => s + v, 0) > 0)
+        .sort((a, b) => b.segments.reduce((s, [, v]) => s + v, 0) - a.segments.reduce((s, [, v]) => s + v, 0));
+    }
+
+    function computeAnnualData(startMonthName, startYear) {
+      const months = rollingMonths(startMonthName, startYear);
+      function monthPos(r) {
+        const p = parseDMYParts(r.date); if (!p) return -1;
+        return months.findIndex(mm => mm.year === p.y && MONTH_UK.indexOf(mm.name) === p.m - 1);
+      }
+      const incByMonth = months.map(() => 0), expByMonth = months.map(() => 0);
+      allRecords.forEach(r => {
+        if (r._t !== 'inc' && r._t !== 'exp') return;
+        const pos = monthPos(r); if (pos === -1) return;
+        if (r._t === 'inc') incByMonth[pos] += usdOf(r); else expByMonth[pos] += usdOf(r);
+      });
+      const balByMonth = incByMonth.map((v, i) => v - expByMonth[i]);
+      const headers = ['Категорія', '', ...months.map(m => m.name)];
+      const balance = { headers, rows: [['Дохід', '', ...incByMonth], ['Витрати', '', ...expByMonth], ['Баланс', '', ...balByMonth]] };
+
+      function grid(type) {
+        const cats = type === 'exp' ? (settings?.expenseCategoriesOrder || []) : (settings?.incomeCategoriesOrder || []);
+        const rows = cats.map(cat => {
+          const vals = months.map(() => 0);
+          allRecords.forEach(r => {
+            if (r._t !== type || r.category !== cat) return;
+            const pos = monthPos(r); if (pos === -1) return;
+            vals[pos] += usdOf(r);
+          });
+          return [cat, '', ...vals];
+        });
+        return { headers, rows };
+      }
+      return { balance, expenses: grid('exp'), income: grid('inc') };
+    }
+
+    function computeAnalyzData(startMonthName, startYear, category) {
+      const thisMonths = rollingMonths(startMonthName, startYear);
+      const prevMonths = rollingMonths(startMonthName, +startYear - 1);
+      function inSet(r, monthsSet) {
+        const p = parseDMYParts(r.date); if (!p) return false;
+        return monthsSet.some(mm => mm.year === p.y && MONTH_UK.indexOf(mm.name) === p.m - 1);
+      }
+      function sumByCategory(type, monthsSet) {
+        const map = {};
+        allRecords.forEach(r => { if (r._t !== type || !inSet(r, monthsSet)) return; map[r.category] = (map[r.category] || 0) + usdOf(r); });
+        return map;
+      }
+      function sumByDesc(type, monthsSet, cat) {
+        const map = {};
+        allRecords.forEach(r => { if (r._t !== type || r.category !== cat || !inSet(r, monthsSet)) return; const k = r.desc || '—'; map[k] = (map[k] || 0) + usdOf(r); });
+        return map;
+      }
+      function combine(mapThis, mapPrev) {
+        const keys = new Set([...Object.keys(mapThis), ...Object.keys(mapPrev)]);
+        return [...keys].map(k => [k, '', mapThis[k] || 0, mapPrev[k] || 0]).filter(r => r[2] || r[3]).sort((a, b) => (b[2] + b[3]) - (a[2] + a[3]));
+      }
+      const expThis = sumByCategory('exp', thisMonths), expPrev = sumByCategory('exp', prevMonths);
+      const incThis = sumByCategory('inc', thisMonths), incPrev = sumByCategory('inc', prevMonths);
+      const subThis = sumByDesc('exp', thisMonths, category), subPrev = sumByDesc('exp', prevMonths, category);
+      function sumSubcatByYear(monthsSet) {
+        const map = {};
+        allRecords.forEach(r => {
+          if (r._t !== 'exp' || r.category !== category || !r.subcategory || !inSet(r, monthsSet)) return;
+          map[r.subcategory] = (map[r.subcategory] || 0) + usdOf(r);
+        });
+        return map;
+      }
+      const subcatThis = sumSubcatByYear(thisMonths);
+      const subcatPrev = sumSubcatByYear(prevMonths);
+      const subcatSummary = combine(subcatThis, subcatPrev); // [[назва,'',цейРік,минРік], ...]
+      return {
+        expenses: { rows: combine(expThis, expPrev) },
+        income: { rows: combine(incThis, incPrev) },
+        subcat: { rows: combine(subThis, subPrev), subcatSummary }
+      };
+    }
+
+    // ── Charts ──
+    function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+    function cardWrap(title, inner, autoHeight = false) {
+      const d = document.createElement('div');
+      d.className = autoHeight ? 'chart-card-auto' : 'chart-card';
+      d.innerHTML = `<div class="chart-title">${title}</div>`; d.appendChild(inner); return d;
+    }
+    function fillCanvas(id) {
+      const wrap = document.createElement('div'); wrap.className = 'chart-fill';
+      const c = document.createElement('canvas'); c.id = id; wrap.appendChild(c); return { wrap, c };
+    }
+
+    function renderCharts(t, data) {
+      Object.keys(charts).forEach(id => destroyChart(id));
+      if (t === 'monthly') {
+        put('slide0', () => makeHBar1('cME', 'Витрати по категоріях', data.expenses, 'exp'));
+        put('slide1', () => {
+          const container = document.createElement('div');
+          container.style.cssText = 'display:flex;flex-direction:column;gap:12px;flex:1;min-height:0';
+          const summary = data.subcat.subcatSummary || [];
+          if (summary.length) {
+            const listCard = document.createElement('div');
+            listCard.className = 'chart-card';
+            listCard.style.flex = '0 0 auto';
+            listCard.innerHTML = `<div class="chart-title">Суми по підкатегоріях</div>
       <div style="display:flex;flex-direction:column;gap:5px;font-size:13px">
         ${summary.map(([n, v]) => `<div style="display:flex;justify-content:space-between">
           <span style="color:var(--txt)">${x(n)}</span>
           <span style="color:var(--sub);font-weight:600">$${v.toFixed(2)}</span>
         </div>`).join('')}
       </div>`;
-              container.appendChild(listCard);
-            }
-            const chartCard = makeHBar1('cMS', 'По описах вибраної категорії', data.subcat, 'sub');
-            chartCard.style.flex = '1';
-            container.appendChild(chartCard);
-            return container;
-          });
-          put('slide2', () => makeHBar1('cMI', 'Доходи по категоріях', data.income, 'inc'));
-        } else if (t === 'annual') {
-          put('slide0', () => makeGroupedBar('cAB', 'Баланс по місяцях', data.balance));
-          put('slide1', () => makeCubeHeatmap('Витрати по категоріях', data.expenses, '#f0566a'), false);
-          put('slide2', () => makeCubeHeatmap('Доходи по категоріях', data.income, '#34c77b'), false);
-        } else {
-          put('slide0', () => makeHBar2('cAE', 'Витрати по категоріях', data.expenses, 'exp'));
-          put('slide1', () => {
-            const container = document.createElement('div');
-            container.style.cssText = 'display:flex;flex-direction:column;gap:12px;flex:1;min-height:0';
-            const summary = data.subcat.subcatSummary || [];
-            if (summary.length) {
-              const listCard = document.createElement('div');
-              listCard.className = 'chart-card';
-              listCard.style.flex = '0 0 auto';
-              listCard.innerHTML = `<div class="chart-title">Суми по підкатегоріях</div>
+            container.appendChild(listCard);
+          }
+          const chartCard = makeHBar1('cMS', 'По описах вибраної категорії', data.subcat, 'sub');
+          chartCard.style.flex = '1';
+          container.appendChild(chartCard);
+          return container;
+        });
+        put('slide2', () => makeHBar1('cMI', 'Доходи по категоріях', data.income, 'inc'));
+      } else if (t === 'annual') {
+        put('slide0', () => makeGroupedBar('cAB', 'Баланс по місяцях', data.balance));
+        put('slide1', () => makeCubeHeatmap('Витрати по категоріях', data.expenses, '#f0566a'), false);
+        put('slide2', () => makeCubeHeatmap('Доходи по категоріях', data.income, '#34c77b'), false);
+      } else {
+        put('slide0', () => makeHBar2('cAE', 'Витрати по категоріях', data.expenses, 'exp'));
+        put('slide1', () => {
+          const container = document.createElement('div');
+          container.style.cssText = 'display:flex;flex-direction:column;gap:12px;flex:1;min-height:0';
+          const summary = data.subcat.subcatSummary || [];
+          if (summary.length) {
+            const listCard = document.createElement('div');
+            listCard.className = 'chart-card';
+            listCard.style.flex = '0 0 auto';
+            listCard.innerHTML = `<div class="chart-title">Суми по підкатегоріях</div>
       <div style="display:flex;flex-direction:column;gap:5px;font-size:13px">
         <table style="width:100%;border-collapse:collapse;font-size:12px">
   <tr style="border-bottom:1px solid var(--border)">
@@ -2540,304 +2507,304 @@
     </tr>`).join('')}
 </table>
       </div>`;
-              container.appendChild(listCard);
-            }
-            const chartCard = makeHBar2('cAS', 'По описах вибраної категорії', data.subcat, 'sub');
-            chartCard.style.minHeight = '360px';
-            chartCard.style.flex = '1';
-            container.appendChild(chartCard);
-            return container;
-          });
-          put('slide2', () => makeHBar2('cAI', 'Доходи по категоріях', data.income, 'inc'));
-        }
-      }
-
-      function put(slideId, fn, flexFill = true) {
-        const s = document.getElementById(slideId);
-        s.innerHTML = '';
-        s.style.justifyContent = flexFill ? 'stretch' : 'flex-start';
-        s.appendChild(fn());
-      }
-
-      // Simple 1-value horizontal bar (monthly)
-      function makeHBar1(id, title, sheetData, type) {
-        const rows = (sheetData?.rows || []).filter(r => r[0] && +r[1] !== 0);
-        const { wrap, c } = fillCanvas(id); const card = cardWrap(title, wrap);
-        if (!rows.length) { wrap.innerHTML = '<div style="text-align:center;color:var(--sub);padding:32px 0">Немає даних</div>'; return card; }
-        const clr = type === 'inc' ? '#34c77b' : type === 'sub' ? '#f5a623' : '#f0566a';
-        setTimeout(() => {
-          destroyChart(id);
-          charts[id] = new Chart(c, {
-            type: 'bar', data: {
-              labels: rows.map(r => r[0]),
-              datasets: [{ data: rows.map(r => +r[1] || 0), backgroundColor: clr, borderRadius: 4, label: '', maxBarThickness: MAX_BAR_THICKNESS }]
-            }, options: {
-              indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-              layout: { padding: { left: 4, right: 20, top: 4, bottom: 4 } },
-              scales: {
-                x: { ticks: { color: '#7b83a0', font: { size: 10 } }, grid: { color: '#2e3650' } },
-                y: { ticks: { color: '#e4e8f4', font: { size: 11 }, autoSkip: false }, grid: { color: '#2e3650' } }
-              },
-              plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` $${(+ctx.parsed.x).toFixed(2)}` } } }
-            }
-          });
-        }, 50); return card;
-      }
-
-      const STACK_COLORS = ['#f0566a', '#f5a623', '#4d8ef0', '#34c77b', '#9b59b6', '#1abc9c', '#e67e22'];
-
-      function makeStackedHBar(id, title, stack) {
-        const { wrap, c } = fillCanvas(id); const card = cardWrap(title, wrap);
-        if (!stack || !stack.length) { wrap.innerHTML = '<div style="text-align:center;color:var(--sub);padding:32px 0">Немає даних</div>'; return card; }
-        const labels = stack.map(s => s.category);
-        const allSegs = [...new Set(stack.flatMap(s => s.segments.map(([n]) => n)))];
-        const datasets = allSegs.map((segName, i) => ({
-          label: segName,
-          data: stack.map(s => { const f = s.segments.find(([n]) => n === segName); return f ? f[1] : 0; }),
-          backgroundColor: STACK_COLORS[i % STACK_COLORS.length],
-          borderRadius: 2, maxBarThickness: MAX_BAR_THICKNESS
-        }));
-        setTimeout(() => {
-          destroyChart(id);
-          charts[id] = new Chart(c, {
-            type: 'bar', data: { labels, datasets }, options: {
-              indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-              layout: { padding: { left: 4, right: 16, top: 4, bottom: 4 } },
-              scales: {
-                x: { stacked: true, ticks: { color: '#7b83a0', font: { size: 10 } }, grid: { color: '#2e3650' } },
-                y: { stacked: true, ticks: { color: '#e4e8f4', font: { size: 11 }, autoSkip: false }, grid: { color: '#2e3650' } }
-              },
-              plugins: {
-                legend: { display: false },
-                tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: $${(+ctx.parsed.x).toFixed(2)}` } }
-              }
-            }
-          });
-        }, 50);
-        return card;
-      }
-
-      // Compare 2-value horizontal bar (analyz)
-      function makeHBar2(id, title, sheetData, type) {
-        const rows = (sheetData?.rows || []).filter(r => r[0]);
-        const { wrap, c } = fillCanvas(id); const card = cardWrap(title, wrap);
-        if (!rows.length) { wrap.innerHTML = '<div style="text-align:center;color:var(--sub);padding:32px 0">Немає даних</div>'; return card; }
-        const thisClr = type === 'inc' ? '#34c77b' : type === 'sub' ? '#f5a623' : '#f0566a';
-        const prevClr = type === 'inc' ? '#34c77b40' : type === 'sub' ? '#f5a62340' : '#f0566a40';
-        setTimeout(() => {
-          destroyChart(id);
-          charts[id] = new Chart(c, {
-            type: 'bar', data: {
-              labels: rows.map(r => r[0]),
-              datasets: [
-                { label: 'Цей рік', data: rows.map(r => +r[2] || 0), backgroundColor: thisClr, borderRadius: 4, maxBarThickness: MAX_BAR_THICKNESS },
-                { label: 'Мин. рік', data: rows.map(r => +r[3] || 0), backgroundColor: prevClr, borderRadius: 4, maxBarThickness: MAX_BAR_THICKNESS }
-              ]
-            }, options: {
-              indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-              layout: { padding: { left: 4, right: 20, top: 4, bottom: 4 } },
-              scales: {
-                x: { ticks: { color: '#7b83a0', font: { size: 10 } }, grid: { color: '#2e3650' } },
-                y: { ticks: { color: '#e4e8f4', font: { size: 11 }, autoSkip: false }, grid: { color: '#2e3650' } }
-              },
-              plugins: {
-                legend: { position: 'top', labels: { color: '#e4e8f4', font: { size: 10 }, boxWidth: 10, padding: 6 } },
-                tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: $${(+ctx.parsed.x).toFixed(2)}` } }
-              }
-            }
-          });
-        }, 50); return card;
-      }
-
-      // Grouped bar (annual balance)
-      function makeGroupedBar(id, title, sheetData) {
-        const headers = sheetData?.headers || [], rows = sheetData?.rows || [];
-        const months = headers.slice(2).filter(Boolean);
-        const { wrap, c } = fillCanvas(id); const card = cardWrap(title, wrap);
-        if (!rows.length || !months.length) return card;
-        const clr = { 'Дохід': '#34c77b', 'Витрати': '#f0566a', 'Баланс': '#4d8ef0' };
-        setTimeout(() => {
-          destroyChart(id);
-          charts[id] = new Chart(c, {
-            type: 'bar', data: {
-              labels: months.map(m => m.substring(0, 3)),
-              datasets: rows.map(r => ({ label: r[0], data: r.slice(2).map(v => +v || 0), backgroundColor: clr[r[0]] || '#7b83a0', borderRadius: 3 }))
-            }, options: {
-              responsive: true, maintainAspectRatio: false,
-              layout: { padding: { left: 4, right: 4, top: 8, bottom: 4 } },
-              scales: {
-                x: { ticks: { color: '#7b83a0', font: { size: 9 }, autoSkip: false }, grid: { color: '#2e3650' } },
-                y: { ticks: { color: '#7b83a0', font: { size: 10 } }, grid: { color: '#2e3650' } }
-              },
-              plugins: {
-                legend: { position: 'top', labels: { color: '#e4e8f4', font: { size: 11 }, boxWidth: 10, padding: 6 } },
-                tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: $${(+ctx.parsed.y).toFixed(2)}` } }
-              }
-            }
-          });
-        }, 50); return card;
-      }
-
-      // ── CUBE HEATMAP (new annual design) ──
-      function makeCubeHeatmap(title, sheetData, color) {
-        const headers = (sheetData?.headers || []).slice(2).filter(Boolean); // 12 month names
-        const rows = sheetData?.rows || [];
-        const wrap = document.createElement('div');
-        wrap.style.cssText = 'width:100%';
-
-        if (!rows.length || !headers.length) {
-          wrap.innerHTML = '<div style="text-align:center;color:var(--sub);padding:32px 0">Немає даних</div>';
-          return cardWrap(title, wrap, true);
-        }
-
-        const allV = rows.flatMap(r => r.slice(2, 2 + headers.length).map(v => +v || 0)).filter(v => v > 0);
-        const maxV = allV.length ? Math.max(...allV) : 1;
-
-        // Month abbreviations legend
-        const legendHtml = `<div style="display:grid;grid-template-columns:repeat(12,1fr);gap:3px;margin-bottom:10px;text-align:center">
-    ${headers.map(m => `<div style="font-size:9px;color:var(--sub)">${m.substring(0, 1)}</div>`).join('')}
-  </div>`;
-        wrap.innerHTML = legendHtml;
-
-        rows.filter(r => r[0]).forEach(r => {
-          const catDiv = document.createElement('div');
-          catDiv.className = 'cube-category';
-
-          const nameDiv = document.createElement('div');
-          nameDiv.className = 'cube-cat-name';
-          nameDiv.textContent = r[0];
-          catDiv.appendChild(nameDiv);
-
-          const cubesDiv = document.createElement('div');
-          cubesDiv.className = 'month-cubes';
-
-          headers.forEach((month, i) => {
-            const val = +r[i + 2] || 0;
-            const cube = document.createElement('div');
-            cube.className = 'cube';
-
-            // ДИНАМІЧНИЙ РОЗРАХУНОК ВИСОТИ
-            // Якщо значення 0 — висота 3px (мінімальна лінія), якщо більше нуля — масштабуємо від 4px до 32px (макс. висота)
-            const minH = 3;
-            const maxH = 48;
-            const calculatedHeight = val > 0 ? Math.max(4, Math.round((val / maxV) * maxH)) : minH;
-            cube.style.height = calculatedHeight + 'px';
-
-            if (val > 0) {
-              const alpha = Math.max(0.12, Math.min(0.92, val / maxV));
-              cube.style.background = color + Math.round(alpha * 255).toString(16).padStart(2, '0');
-            } else {
-              cube.style.background = 'var(--border)';
-              cube.style.opacity = '0.25';
-            }
-            cube.dataset.month = month;
-            cube.dataset.val = val.toFixed(2);
-            cube.addEventListener('click', e => showCubeTip(e, month, val));
-            cubesDiv.appendChild(cube);
-          });
-
-          catDiv.appendChild(cubesDiv);
-          wrap.appendChild(catDiv);
+            container.appendChild(listCard);
+          }
+          const chartCard = makeHBar2('cAS', 'По описах вибраної категорії', data.subcat, 'sub');
+          chartCard.style.minHeight = '360px';
+          chartCard.style.flex = '1';
+          container.appendChild(chartCard);
+          return container;
         });
+        put('slide2', () => makeHBar2('cAI', 'Доходи по категоріях', data.income, 'inc'));
+      }
+    }
 
+    function put(slideId, fn, flexFill = true) {
+      const s = document.getElementById(slideId);
+      s.innerHTML = '';
+      s.style.justifyContent = flexFill ? 'stretch' : 'flex-start';
+      s.appendChild(fn());
+    }
+
+    // Simple 1-value horizontal bar (monthly)
+    function makeHBar1(id, title, sheetData, type) {
+      const rows = (sheetData?.rows || []).filter(r => r[0] && +r[1] !== 0);
+      const { wrap, c } = fillCanvas(id); const card = cardWrap(title, wrap);
+      if (!rows.length) { wrap.innerHTML = '<div style="text-align:center;color:var(--sub);padding:32px 0">Немає даних</div>'; return card; }
+      const clr = type === 'inc' ? '#34c77b' : type === 'sub' ? '#f5a623' : '#f0566a';
+      setTimeout(() => {
+        destroyChart(id);
+        charts[id] = new Chart(c, {
+          type: 'bar', data: {
+            labels: rows.map(r => r[0]),
+            datasets: [{ data: rows.map(r => +r[1] || 0), backgroundColor: clr, borderRadius: 4, label: '', maxBarThickness: MAX_BAR_THICKNESS }]
+          }, options: {
+            indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+            layout: { padding: { left: 4, right: 20, top: 4, bottom: 4 } },
+            scales: {
+              x: { ticks: { color: '#7b83a0', font: { size: 10 } }, grid: { color: '#2e3650' } },
+              y: { ticks: { color: '#e4e8f4', font: { size: 11 }, autoSkip: false }, grid: { color: '#2e3650' } }
+            },
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` $${(+ctx.parsed.x).toFixed(2)}` } } }
+          }
+        });
+      }, 50); return card;
+    }
+
+    const STACK_COLORS = ['#f0566a', '#f5a623', '#4d8ef0', '#34c77b', '#9b59b6', '#1abc9c', '#e67e22'];
+
+    function makeStackedHBar(id, title, stack) {
+      const { wrap, c } = fillCanvas(id); const card = cardWrap(title, wrap);
+      if (!stack || !stack.length) { wrap.innerHTML = '<div style="text-align:center;color:var(--sub);padding:32px 0">Немає даних</div>'; return card; }
+      const labels = stack.map(s => s.category);
+      const allSegs = [...new Set(stack.flatMap(s => s.segments.map(([n]) => n)))];
+      const datasets = allSegs.map((segName, i) => ({
+        label: segName,
+        data: stack.map(s => { const f = s.segments.find(([n]) => n === segName); return f ? f[1] : 0; }),
+        backgroundColor: STACK_COLORS[i % STACK_COLORS.length],
+        borderRadius: 2, maxBarThickness: MAX_BAR_THICKNESS
+      }));
+      setTimeout(() => {
+        destroyChart(id);
+        charts[id] = new Chart(c, {
+          type: 'bar', data: { labels, datasets }, options: {
+            indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+            layout: { padding: { left: 4, right: 16, top: 4, bottom: 4 } },
+            scales: {
+              x: { stacked: true, ticks: { color: '#7b83a0', font: { size: 10 } }, grid: { color: '#2e3650' } },
+              y: { stacked: true, ticks: { color: '#e4e8f4', font: { size: 11 }, autoSkip: false }, grid: { color: '#2e3650' } }
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: $${(+ctx.parsed.x).toFixed(2)}` } }
+            }
+          }
+        });
+      }, 50);
+      return card;
+    }
+
+    // Compare 2-value horizontal bar (analyz)
+    function makeHBar2(id, title, sheetData, type) {
+      const rows = (sheetData?.rows || []).filter(r => r[0]);
+      const { wrap, c } = fillCanvas(id); const card = cardWrap(title, wrap);
+      if (!rows.length) { wrap.innerHTML = '<div style="text-align:center;color:var(--sub);padding:32px 0">Немає даних</div>'; return card; }
+      const thisClr = type === 'inc' ? '#34c77b' : type === 'sub' ? '#f5a623' : '#f0566a';
+      const prevClr = type === 'inc' ? '#34c77b40' : type === 'sub' ? '#f5a62340' : '#f0566a40';
+      setTimeout(() => {
+        destroyChart(id);
+        charts[id] = new Chart(c, {
+          type: 'bar', data: {
+            labels: rows.map(r => r[0]),
+            datasets: [
+              { label: 'Цей рік', data: rows.map(r => +r[2] || 0), backgroundColor: thisClr, borderRadius: 4, maxBarThickness: MAX_BAR_THICKNESS },
+              { label: 'Мин. рік', data: rows.map(r => +r[3] || 0), backgroundColor: prevClr, borderRadius: 4, maxBarThickness: MAX_BAR_THICKNESS }
+            ]
+          }, options: {
+            indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+            layout: { padding: { left: 4, right: 20, top: 4, bottom: 4 } },
+            scales: {
+              x: { ticks: { color: '#7b83a0', font: { size: 10 } }, grid: { color: '#2e3650' } },
+              y: { ticks: { color: '#e4e8f4', font: { size: 11 }, autoSkip: false }, grid: { color: '#2e3650' } }
+            },
+            plugins: {
+              legend: { position: 'top', labels: { color: '#e4e8f4', font: { size: 10 }, boxWidth: 10, padding: 6 } },
+              tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: $${(+ctx.parsed.x).toFixed(2)}` } }
+            }
+          }
+        });
+      }, 50); return card;
+    }
+
+    // Grouped bar (annual balance)
+    function makeGroupedBar(id, title, sheetData) {
+      const headers = sheetData?.headers || [], rows = sheetData?.rows || [];
+      const months = headers.slice(2).filter(Boolean);
+      const { wrap, c } = fillCanvas(id); const card = cardWrap(title, wrap);
+      if (!rows.length || !months.length) return card;
+      const clr = { 'Дохід': '#34c77b', 'Витрати': '#f0566a', 'Баланс': '#4d8ef0' };
+      setTimeout(() => {
+        destroyChart(id);
+        charts[id] = new Chart(c, {
+          type: 'bar', data: {
+            labels: months.map(m => m.substring(0, 3)),
+            datasets: rows.map(r => ({ label: r[0], data: r.slice(2).map(v => +v || 0), backgroundColor: clr[r[0]] || '#7b83a0', borderRadius: 3 }))
+          }, options: {
+            responsive: true, maintainAspectRatio: false,
+            layout: { padding: { left: 4, right: 4, top: 8, bottom: 4 } },
+            scales: {
+              x: { ticks: { color: '#7b83a0', font: { size: 9 }, autoSkip: false }, grid: { color: '#2e3650' } },
+              y: { ticks: { color: '#7b83a0', font: { size: 10 } }, grid: { color: '#2e3650' } }
+            },
+            plugins: {
+              legend: { position: 'top', labels: { color: '#e4e8f4', font: { size: 11 }, boxWidth: 10, padding: 6 } },
+              tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: $${(+ctx.parsed.y).toFixed(2)}` } }
+            }
+          }
+        });
+      }, 50); return card;
+    }
+
+    // ── CUBE HEATMAP (new annual design) ──
+    function makeCubeHeatmap(title, sheetData, color) {
+      const headers = (sheetData?.headers || []).slice(2).filter(Boolean); // 12 month names
+      const rows = sheetData?.rows || [];
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'width:100%';
+
+      if (!rows.length || !headers.length) {
+        wrap.innerHTML = '<div style="text-align:center;color:var(--sub);padding:32px 0">Немає даних</div>';
         return cardWrap(title, wrap, true);
       }
 
-      function showCubeTip(event, month, val) {
-        const tt = document.getElementById('cubeTip');
-        tt.textContent = `${month}: $${(+val).toFixed(2)}`;
-        const rect = event.target.getBoundingClientRect();
-        const ttLeft = Math.max(8, Math.min(rect.left - 20, window.innerWidth - 160));
-        const ttTop = Math.max(8, rect.top - 44);
-        tt.style.left = ttLeft + 'px';
-        tt.style.top = ttTop + 'px';
-        tt.classList.add('show');
-        clearTimeout(cubeTipTimer);
-        cubeTipTimer = setTimeout(() => tt.classList.remove('show'), 2000);
-      }
+      const allV = rows.flatMap(r => r.slice(2, 2 + headers.length).map(v => +v || 0)).filter(v => v > 0);
+      const maxV = allV.length ? Math.max(...allV) : 1;
 
-      // ── Carousel ──
-      function goSlide(n) {
-        curSlide = n;
-        document.getElementById('carouselTrack').style.transform = `translateX(-${n * 100}%)`;
-        document.querySelectorAll('#carouselNav .dot').forEach((d, i) => d.classList.toggle('active', i === n));
-      }
-      function setSlide(n) { curSlide = n; goSlide(n); }
+      // Month abbreviations legend
+      const legendHtml = `<div style="display:grid;grid-template-columns:repeat(12,1fr);gap:3px;margin-bottom:10px;text-align:center">
+    ${headers.map(m => `<div style="font-size:9px;color:var(--sub)">${m.substring(0, 1)}</div>`).join('')}
+  </div>`;
+      wrap.innerHTML = legendHtml;
 
-      function isHScrollable(el) {
-        while (el && el !== document.body) {
-          const s = getComputedStyle(el), ox = s.overflowX;
-          if ((ox === 'auto' || ox === 'scroll') && el.scrollWidth > el.clientWidth + 2) return true;
-          el = el.parentElement;
-        } return false;
-      }
-      function initCarouselSwipe() {
-        const track = document.getElementById('carouselTrack');
-        let sx = 0, sy = 0, inScroll = false;
-        track.addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; inScroll = isHScrollable(e.target); });
-        track.addEventListener('touchend', e => {
-          if (inScroll) return;
-          const dx = sx - e.changedTouches[0].clientX, dy = sy - e.changedTouches[0].clientY;
-          if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
-            if (dx > 0 && curSlide < 2) goSlide(curSlide + 1);
-            if (dx < 0 && curSlide > 0) goSlide(curSlide - 1);
+      rows.filter(r => r[0]).forEach(r => {
+        const catDiv = document.createElement('div');
+        catDiv.className = 'cube-category';
+
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'cube-cat-name';
+        nameDiv.textContent = r[0];
+        catDiv.appendChild(nameDiv);
+
+        const cubesDiv = document.createElement('div');
+        cubesDiv.className = 'month-cubes';
+
+        headers.forEach((month, i) => {
+          const val = +r[i + 2] || 0;
+          const cube = document.createElement('div');
+          cube.className = 'cube';
+
+          // ДИНАМІЧНИЙ РОЗРАХУНОК ВИСОТИ
+          // Якщо значення 0 — висота 3px (мінімальна лінія), якщо більше нуля — масштабуємо від 4px до 32px (макс. висота)
+          const minH = 3;
+          const maxH = 48;
+          const calculatedHeight = val > 0 ? Math.max(4, Math.round((val / maxV) * maxH)) : minH;
+          cube.style.height = calculatedHeight + 'px';
+
+          if (val > 0) {
+            const alpha = Math.max(0.12, Math.min(0.92, val / maxV));
+            cube.style.background = color + Math.round(alpha * 255).toString(16).padStart(2, '0');
+          } else {
+            cube.style.background = 'var(--border)';
+            cube.style.opacity = '0.25';
           }
+          cube.dataset.month = month;
+          cube.dataset.val = val.toFixed(2);
+          cube.addEventListener('click', e => showCubeTip(e, month, val));
+          cubesDiv.appendChild(cube);
         });
-      }
 
-      // ── PTR (overlay - doesn't affect layout, preventDefault stops native bounce) ──
-      function initPTR() {
-        const ptr = document.getElementById('ptrOverlay');
-        ['addScroll', 'recsScroll'].forEach(scrollId => {
-          const el = document.getElementById(scrollId);
-          if (!el || el.dataset.ptrInit) return;
-          el.dataset.ptrInit = '1';
-          let sy = 0, active = false, pulling = false;
-          el.addEventListener('touchstart', e => {
-            if (el.scrollTop === 0) { sy = e.touches[0].clientY; active = true; pulling = false; }
-            else active = false;
-          }, { passive: true });
-          el.addEventListener('touchmove', e => {
-            if (!active) return;
-            const dy = e.touches[0].clientY - sy;
-            if (dy > 0 && el.scrollTop === 0) {
-              pulling = true;
-              if (dy > 8) e.preventDefault(); // stop native rubber-band/address-bar jump
-              ptr.classList.toggle('show', dy > 60);
-            }
-          }, { passive: false });
-          el.addEventListener('touchend', e => {
-            if (!active) return; active = false;
-            const dy = e.changedTouches[0].clientY - sy;
-            ptr.classList.remove('show');
-            if (pulling && dy > 80 && el.scrollTop === 0) location.reload();
-            pulling = false;
-          }, { passive: true });
-        });
-      }
+        catDiv.appendChild(cubesDiv);
+        wrap.appendChild(catDiv);
+      });
 
-      // ── Navigation ──
-      function showPage(p) {
-        ['add', 'recs', 'analytics'].forEach(n => {
-          document.getElementById(n + 'Page').classList.toggle('active', p === n);
-          document.getElementById('nav-' + n).classList.toggle('active', p === n);
-        });
-        if (p === 'recs') loadRecords();
-        if (p === 'analytics') initAnalytics();
-      }
+      return cardWrap(title, wrap, true);
+    }
 
-      // ── Utils ──
-      function genUUID(email) {
-        const pre = myPrefix;
-        const u = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); });
-        return pre + '_' + u;
-      }
-      function x(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
-      let toastT = null;
-      function showToast(msg, type = 'ok') {
-        const t = document.getElementById('toast'); t.textContent = msg; t.className = 'toast show ' + type;
-        clearTimeout(toastT); toastT = setTimeout(() => t.className = 'toast', 2800);
-      }
+    function showCubeTip(event, month, val) {
+      const tt = document.getElementById('cubeTip');
+      tt.textContent = `${month}: $${(+val).toFixed(2)}`;
+      const rect = event.target.getBoundingClientRect();
+      const ttLeft = Math.max(8, Math.min(rect.left - 20, window.innerWidth - 160));
+      const ttTop = Math.max(8, rect.top - 44);
+      tt.style.left = ttLeft + 'px';
+      tt.style.top = ttTop + 'px';
+      tt.classList.add('show');
+      clearTimeout(cubeTipTimer);
+      cubeTipTimer = setTimeout(() => tt.classList.remove('show'), 2000);
+    }
+
+    // ── Carousel ──
+    function goSlide(n) {
+      curSlide = n;
+      document.getElementById('carouselTrack').style.transform = `translateX(-${n * 100}%)`;
+      document.querySelectorAll('#carouselNav .dot').forEach((d, i) => d.classList.toggle('active', i === n));
+    }
+    function setSlide(n) { curSlide = n; goSlide(n); }
+
+    function isHScrollable(el) {
+      while (el && el !== document.body) {
+        const s = getComputedStyle(el), ox = s.overflowX;
+        if ((ox === 'auto' || ox === 'scroll') && el.scrollWidth > el.clientWidth + 2) return true;
+        el = el.parentElement;
+      } return false;
+    }
+    function initCarouselSwipe() {
+      const track = document.getElementById('carouselTrack');
+      let sx = 0, sy = 0, inScroll = false;
+      track.addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; inScroll = isHScrollable(e.target); });
+      track.addEventListener('touchend', e => {
+        if (inScroll) return;
+        const dx = sx - e.changedTouches[0].clientX, dy = sy - e.changedTouches[0].clientY;
+        if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+          if (dx > 0 && curSlide < 2) goSlide(curSlide + 1);
+          if (dx < 0 && curSlide > 0) goSlide(curSlide - 1);
+        }
+      });
+    }
+
+    // ── PTR (overlay - doesn't affect layout, preventDefault stops native bounce) ──
+    function initPTR() {
+      const ptr = document.getElementById('ptrOverlay');
+      ['addScroll', 'recsScroll'].forEach(scrollId => {
+        const el = document.getElementById(scrollId);
+        if (!el || el.dataset.ptrInit) return;
+        el.dataset.ptrInit = '1';
+        let sy = 0, active = false, pulling = false;
+        el.addEventListener('touchstart', e => {
+          if (el.scrollTop === 0) { sy = e.touches[0].clientY; active = true; pulling = false; }
+          else active = false;
+        }, { passive: true });
+        el.addEventListener('touchmove', e => {
+          if (!active) return;
+          const dy = e.touches[0].clientY - sy;
+          if (dy > 0 && el.scrollTop === 0) {
+            pulling = true;
+            if (dy > 8) e.preventDefault(); // stop native rubber-band/address-bar jump
+            ptr.classList.toggle('show', dy > 60);
+          }
+        }, { passive: false });
+        el.addEventListener('touchend', e => {
+          if (!active) return; active = false;
+          const dy = e.changedTouches[0].clientY - sy;
+          ptr.classList.remove('show');
+          if (pulling && dy > 80 && el.scrollTop === 0) location.reload();
+          pulling = false;
+        }, { passive: true });
+      });
+    }
+
+    // ── Navigation ──
+    function showPage(p) {
+      ['add', 'recs', 'analytics'].forEach(n => {
+        document.getElementById(n + 'Page').classList.toggle('active', p === n);
+        document.getElementById('nav-' + n).classList.toggle('active', p === n);
+      });
+      if (p === 'recs') loadRecords();
+      if (p === 'analytics') initAnalytics();
+    }
+
+    // ── Utils ──
+    function genUUID(email) {
+      const pre = myPrefix;
+      const u = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); });
+      return pre + '_' + u;
+    }
+    function x(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+    let toastT = null;
+    function showToast(msg, type = 'ok') {
+      const t = document.getElementById('toast'); t.textContent = msg; t.className = 'toast show ' + type;
+      clearTimeout(toastT); toastT = setTimeout(() => t.className = 'toast', 2800);
+    }
   </script>
 </body>
 
