@@ -1411,11 +1411,13 @@
 
     // ── Завантаження довідників з Firestore ──
     const DICT_DOCS = [
-      'expenseCategories', 'incomeCategories', 'businessCategories',
-      'expenseSubcategories',
-      'expenseDescriptions', 'incomeDescriptions', 'businessDescriptions',
-      'currencies', 'months', 'counters'
-    ];
+  'expenseCategories', 'incomeCategories', 'businessCategories',
+  'expenseSubcategories',
+  'expenseDescriptions', 'incomeDescriptions', 'businessDescriptions',
+  'expenseCategorySubcategories',
+  'expenseCategoryDescriptions', 'incomeCategoryDescriptions', 'businessCategoryDescriptions',
+  'currencies', 'months', 'counters'
+];
     async function loadDictionaries() {
       try {
         const results = await Promise.all(
@@ -1690,37 +1692,37 @@
     let subcatFreeText = false;
 
     function openSubcatDropdown(inputId, dropId) {
-      if (subcatFreeText) return; // вже в режимі вільного вводу — керує onSubcatFreeInput
-      const input = document.getElementById(inputId), drop = document.getElementById(dropId);
-      const catId = document.getElementById('fCat').value;
-      const catName = resolveName('expenseCategories', catId) || catId;
-      const subFreq = {};
-      allRecords.filter(r => r._t === 'exp' && r.category === catName && r.subcategory)
-        .forEach(r => { subFreq[r.subcategory] = (subFreq[r.subcategory] || 0) + 1; });
-      const known = Object.keys(subFreq).sort((a, b) => subFreq[b] - subFreq[a]);
+  if (subcatFreeText) return;
+  const input = document.getElementById(inputId), drop = document.getElementById(dropId);
+  const catId = document.getElementById('fCat').value;
 
-      let html = known.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
-      html += `<div class="desc-opt" data-other="1" style="color:var(--acc);font-weight:600">… Інша (ввести текст)</div>`;
-      drop.innerHTML = html;
+  const subIds = dictionaries.expenseCategorySubcategories?.[catId] || [];
+  const known = subIds.map(id => resolveName('expenseSubcategories', id));
 
-      drop.querySelectorAll('.desc-opt').forEach(el => {
-        el.addEventListener('mousedown', e => {
-          e.preventDefault();
-          if (el.dataset.other) {
-            subcatFreeText = true;
-            input.removeAttribute('readonly');
-            input.value = '';
-            input.placeholder = 'Введіть нову підкатегорію…';
-            drop.classList.remove('show');
-            input.focus();
-          } else {
-            input.value = el.dataset.val;
-            drop.classList.remove('show');
-          }
-        });
-      });
-      drop.classList.add('show');
-    }
+  let html = known.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
+  if (subIds.length < 5) {
+    html += `<div class="desc-opt" data-other="1" style="color:var(--acc);font-weight:600">… Інша (ввести текст)</div>`;
+  }
+  drop.innerHTML = html;
+
+  drop.querySelectorAll('.desc-opt').forEach(el => {
+    el.addEventListener('mousedown', e => {
+      e.preventDefault();
+      if (el.dataset.other) {
+        subcatFreeText = true;
+        input.removeAttribute('readonly');
+        input.value = '';
+        input.placeholder = 'Введіть нову підкатегорію…';
+        drop.classList.remove('show');
+        input.focus();
+      } else {
+        input.value = el.dataset.val;
+        drop.classList.remove('show');
+      }
+    });
+  });
+  drop.classList.add('show');
+}
 
     function onSubcatFreeInput(inputId, dropId) {
       if (!subcatFreeText) return;
@@ -1749,37 +1751,37 @@
     let eSubcatFreeText = false;
 
     function openSubcatDropdownEdit(inputId, dropId) {
-      if (eSubcatFreeText) return;
-      const input = document.getElementById(inputId), drop = document.getElementById(dropId);
-      const catId = document.getElementById('eCat').value;
-      const catName = resolveName('expenseCategories', catId) || catId;
-      const subFreq = {};
-      allRecords.filter(r => r._t === 'exp' && r.category === catName && r.subcategory)
-        .forEach(r => { subFreq[r.subcategory] = (subFreq[r.subcategory] || 0) + 1; });
-      const known = Object.keys(subFreq).sort((a, b) => subFreq[b] - subFreq[a]);
+  if (eSubcatFreeText) return;
+  const input = document.getElementById(inputId), drop = document.getElementById(dropId);
+  const catId = document.getElementById('eCat').value;
 
-      let html = known.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
-      html += `<div class="desc-opt" data-other="1" style="color:var(--acc);font-weight:600">… Інша (ввести текст)</div>`;
-      drop.innerHTML = html;
+  const subIds = dictionaries.expenseCategorySubcategories?.[catId] || [];
+  const known = subIds.map(id => resolveName('expenseSubcategories', id));
 
-      drop.querySelectorAll('.desc-opt').forEach(el => {
-        el.addEventListener('mousedown', e => {
-          e.preventDefault();
-          if (el.dataset.other) {
-            eSubcatFreeText = true;
-            input.removeAttribute('readonly');
-            input.value = '';
-            input.placeholder = 'Введіть нову підкатегорію…';
-            drop.classList.remove('show');
-            input.focus();
-          } else {
-            input.value = el.dataset.val;
-            drop.classList.remove('show');
-          }
-        });
-      });
-      drop.classList.add('show');
-    }
+  let html = known.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
+  if (subIds.length < 5) {
+    html += `<div class="desc-opt" data-other="1" style="color:var(--acc);font-weight:600">… Інша (ввести текст)</div>`;
+  }
+  drop.innerHTML = html;
+
+  drop.querySelectorAll('.desc-opt').forEach(el => {
+    el.addEventListener('mousedown', e => {
+      e.preventDefault();
+      if (el.dataset.other) {
+        eSubcatFreeText = true;
+        input.removeAttribute('readonly');
+        input.value = '';
+        input.placeholder = 'Введіть нову підкатегорію…';
+        drop.classList.remove('show');
+        input.focus();
+      } else {
+        input.value = el.dataset.val;
+        drop.classList.remove('show');
+      }
+    });
+  });
+  drop.classList.add('show');
+}
 
     function onSubcatFreeInputEdit(inputId, dropId) {
       if (!eSubcatFreeText) return;
