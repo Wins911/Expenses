@@ -5,7 +5,7 @@
 
 // ── Замініть на реальні email ──
 var ALLOWED_USERS = [
-  'xxxx.911@gmail.com',
+  'xxxx@gmail.com',
   'yyyy@gmail.com'
 ];
 var USER_PREFIX = {
@@ -128,6 +128,10 @@ function addRecord(data, email) {
   sheet.getRange(row, 8).setValue(data.desc || ''); // H: Опис
   sheet.getRange(row, 9).setValue(currency);        // I: Валюта
 
+  if (sheetKey === 'expenses') {
+    sheet.getRange(row, 12).setValue(data.subcategory || ''); // L: Підкатегорія
+  }
+
   // J: Курс→USD
   if (currency === 'USD') {
     sheet.getRange(row, 10).setValue(1);
@@ -231,7 +235,7 @@ function getRecords(data) {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return { status: 'ok', records: [] };
 
-  var numCols = data.sheet === 'business' ? 13 : 11;
+  var numCols = data.sheet === 'business' ? 13 : (data.sheet === 'expenses' ? 12 : 11);
   var values = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
   var records = [];
 
@@ -258,6 +262,7 @@ function getRecords(data) {
       amount: row[6] || 0,
       desc: row[7] || '',
       currency: row[8] || '',
+      subcategory: data.sheet === 'expenses' ? (row[11] || '') : '', // L: Підкатегорія
       rateUSD: row[9] || 0,
       usd: row[10] || 0,   // K: базова валюта (USD) — для коректних підсумків
       rateUAH: data.sheet === 'business' ? (row[11] || 0) : null,
@@ -287,6 +292,10 @@ function updateRecord(data) {
   sheet.getRange(row, 7).setValue(parseFloat(data.amount) || 0); // G
   sheet.getRange(row, 8).setValue(data.desc || '');        // H
   sheet.getRange(row, 9).setValue(currency);               // I
+
+  if (data.sheet === 'expenses') {
+    sheet.getRange(row, 12).setValue(data.subcategory || ''); // L: Підкатегорія
+  }
 
   if (currency === 'USD') {
     sheet.getRange(row, 10).setValue(1);
@@ -560,7 +569,7 @@ function importDictionariesToFirestore() {
     'Категорія бізнесу': { doc: 'businessCategories', prefix: 'BzCat' },
     'Опис витрат': { doc: 'expenseDescriptions', prefix: 'ExDsc' },
     'Опис доходів': { doc: 'incomeDescriptions', prefix: 'InDsc' },
-    'Опис бізнесу': { doc: 'BusinessDescriptions', prefix: 'BzDsc' },
+    'Опис бізнесу': { doc: 'businessDescriptions', prefix: 'BzDsc' },
     'Підкатегорія витрат': { doc: 'expenseSubcategories', prefix: 'ExSub' }
   };
 
@@ -825,7 +834,7 @@ function exportSheet_(cfg, projectId, token, unmatched) {
         rateUSD: { doubleValue: row[9] || 1 },
         amountUSD: { doubleValue: row[10] || 0 },
         date: { stringValue: dateStr },
-        author: { stringValue: 'xxxx@gmail.com' },
+        author: { stringValue: 'wins.911@gmail.com' },
         status: { stringValue: 'ACTIVE' },
         createdAt: { timestampValue: toFirestoreTimestamp_(row[1], dateStr) },
         updatedAt: { timestampValue: toFirestoreTimestamp_(row[2], dateStr) },
@@ -972,6 +981,364 @@ function formatFirestoreTimestamp(val, fallbackDate) {
 
   // 3. Резервний варіант, якщо і dateStr порожній — поточний час
   return new Date().toISOString();
+}
+
+// ══════════════════════════════════════════
+// АСИНХРОННИЙ ІМПОРТЕР: Firestore → Sheets (тільки перегляд)
+// Викликається тригером за часом кожні кілька хвилин
+// ══════════════════════════════════════════
+var IMPORT_SHEETS = {
+  expenses: { name: 'Expenses', hasSubcat: true, hasUAH: false },
+  income: { name: 'Income', hasSubcat: false, hasUAH: false },
+  business: { name: 'Business', hasSubcat: false, hasUAH: true }
+};
+
+function syncFirestoreToSheets() {
+  var PROJECT_ID = 'expensesa';
+  var token = ScriptApp.getOAuthToken();
+  var props = PropertiesService.getScriptProperties();
+
+  // ── Довідники для резолву ID → назва (читаємо один раз на весь прохід) ──
+  var dicts = {
+    expenseCategories: getFirestoreDoc_('dictionaries/expenseCategories', PROJECT_ID, token),
+    incomeCategories: getFirestoreDoc_('dictionaries/incomeCategories', PROJECT_ID, token),
+    businessCategories: getFirestoreDoc_('dictionaries/businessCategories', PROJECT_ID, token),
+    expenseSubcategories: getFirestoreDoc_('dictionaries/expenseSubcategories', PROJECT_ID, token),
+    expenseDescriptions: getFirestoreDoc_('dictionaries/expenseDescriptions', PROJECT_ID, token),
+    incomeDescriptions: getFirestoreDoc_('dictionaries/incomeDescriptions', PROJECT_ID, token),
+    businessDescriptions: getFirestoreDoc_('dictionaries/businessDescriptions', PROJECT_ID, token),
+    currencies: getFirestoreDoc_('dictionaries/currencies', PROJECT_ID, token)
+  };
+
+  Object.keys(IMPORT_SHEETS).forEach(function (collectionName) {
+    syncCollection_(collectionName, IMPORT_SHEETS[collectionName], dicts, props, PROJECT_ID, token);
+  });
+}
+
+function syncCollection_(collectionName, cfg, dicts, props, projectId, token) {
+  var propKey = 'lastSync_' + collectionName;
+  var lastSync = props.getProperty(propKey) || '1970-01-01T00:00:00.000Z';
+
+  var url = 'https://firestore.googleapis.com/v1/projects/' + projectId
+    + '/databases/(default)/documents/' + collectionName
+    + '?pageSize=200';
+
+  var docs = [];
+  var pageToken = null;
+  do {
+    var reqUrl = url + (pageToken ? '&pageToken=' + pageToken : '');
+    var resp = UrlFetchApp.fetch(reqUrl, {
+      headers: { Authorization: 'Bearer ' + token },
+      muteHttpExceptions: true
+    });
+    if (resp.getResponseCode() !== 200) {
+      Logger.log('Помилка читання ' + collectionName + ': ' + resp.getContentText());
+      return;
+    }
+    var json = JSON.parse(resp.getContentText());
+    (json.documents || []).forEach(function (d) { docs.push(d); });
+    pageToken = json.nextPageToken || null;
+  } while (pageToken);
+
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(cfg.name);
+  var newestTimestamp = lastSync;
+  var updated = 0, added = 0;
+
+  docs.forEach(function (docRaw) {
+    var fields = parseFirestoreFields_(docRaw.fields);
+    var updatedAt = fields.updatedAt || fields.createdAt || '1970-01-01T00:00:00.000Z';
+    if (updatedAt <= lastSync) return; // не змінювався від минулого разу — пропускаємо
+
+    var docId = docRaw.name.split('/').pop();
+    var row = findRowByUuid_(sheet, docId);
+    var isNew = !row;
+    if (isNew) row = sheet.getLastRow() + 1;
+
+    var catDict = collectionName === 'expenses' ? dicts.expenseCategories
+      : collectionName === 'income' ? dicts.incomeCategories
+        : dicts.businessCategories;
+    var dscDict = collectionName === 'expenses' ? dicts.expenseDescriptions
+      : collectionName === 'income' ? dicts.incomeDescriptions
+        : dicts.businessDescriptions;
+
+    var catName = catDict[fields.categoryId] || fields.categoryId || '';
+    var dscName = dscDict[fields.descId] || '';
+    var curCode = dicts.currencies[fields.currencyId] || '';
+
+    sheet.getRange(row, 1).setValue(docId);                                  // A: UUID (Firestore doc ID)
+    sheet.getRange(row, 2).setValue(new Date(fields.createdAt || updatedAt)); // B: Created
+    sheet.getRange(row, 3).setValue(new Date(updatedAt));                    // C: Updated
+    sheet.getRange(row, 4).setValue(fields.status || 'ACTIVE');              // D: Status
+    sheet.getRange(row, 5).setValue(sheetDate_(fields.date));                // E: Дата
+    sheet.getRange(row, 6).setValue(catName);                                // F: Категорія
+    sheet.getRange(row, 7).setValue(fields.amount || 0);                     // G: Сума
+    sheet.getRange(row, 8).setValue(dscName);                                // H: Опис
+    sheet.getRange(row, 9).setValue(curCode);                                // I: Валюта
+    sheet.getRange(row, 10).setValue(fields.rateUSD || 1);                   // J: Курс→USD
+
+    if (cfg.hasSubcat) {
+      var subName = dicts.expenseSubcategories[fields.subcategoryId] || '';
+      sheet.getRange(row, 12).setValue(subName);                            // L: Підкатегорія
+    }
+    if (cfg.hasUAH) {
+      sheet.getRange(row, 12).setValue(fields.rateUAH || 1);                // L: Курс2→UAH (Бізнес)
+    }
+
+    if (isNew) added++; else updated++;
+    if (updatedAt > newestTimestamp) newestTimestamp = updatedAt;
+  });
+
+  props.setProperty(propKey, newestTimestamp);
+  Logger.log(cfg.name + ': нових ' + added + ', оновлено ' + updated);
+}
+
+// ── Знаходить рядок за UUID у колонці A, або null якщо не знайдено ──
+function findRowByUuid_(sheet, uuid) {
+  var lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+  var ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (ids[i][0] === uuid) return i + 2;
+  }
+  return null;
+}
+
+// ── Перетворює Firestore REST fields{} на плаский JS-об'єкт ──
+function parseFirestoreFields_(fields) {
+  var out = {};
+  if (!fields) return out;
+  Object.keys(fields).forEach(function (key) {
+    var f = fields[key];
+    if (f.stringValue !== undefined) out[key] = f.stringValue;
+    else if (f.doubleValue !== undefined) out[key] = f.doubleValue;
+    else if (f.integerValue !== undefined) out[key] = parseInt(f.integerValue, 10);
+    else if (f.booleanValue !== undefined) out[key] = f.booleanValue;
+    else if (f.timestampValue !== undefined) out[key] = f.timestampValue;
+  });
+  return out;
+}
+
+function sheetDate_(iso) {
+  if (!iso) return '';
+  var p = iso.split('-');
+  return p.length === 3 ? p[2] + '.' + p[1] + '.' + p[0] : iso;
+}
+
+// ── Одноразове налаштування тригера — запустіть вручну ОДИН РАЗ ──
+function setupSyncTrigger() {
+  ScriptTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'syncFirestoreToSheets') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('syncFirestoreToSheets')
+    .timeBased()
+    .everyMinutes(30)
+    .create();
+  Logger.log('Тригер створено: кожні 30 хвилин');
+}
+function ScriptTriggers() { return ScriptApp.getProjectTriggers(); }
+
+function buildCategorySubcategoryDescriptionMaps() {
+  var PROJECT_ID = 'expensesa';
+  var token = ScriptApp.getOAuthToken();
+
+  var expenses = fetchAllDocs_('expenses', PROJECT_ID, token);
+  var income = fetchAllDocs_('income', PROJECT_ID, token);
+  var business = fetchAllDocs_('business', PROJECT_ID, token);
+
+  var subFreq = {}, expDescFreq = {};
+  expenses.forEach(function (doc) {
+    var f = parseFirestoreFields_(doc.fields);
+    if (f.status === 'DELETED') return;
+    if (f.categoryId && f.subcategoryId) {
+      subFreq[f.categoryId] = subFreq[f.categoryId] || {};
+      subFreq[f.categoryId][f.subcategoryId] = (subFreq[f.categoryId][f.subcategoryId] || 0) + 1;
+    }
+    if (f.categoryId && f.descId) {
+      expDescFreq[f.categoryId] = expDescFreq[f.categoryId] || {};
+      expDescFreq[f.categoryId][f.descId] = (expDescFreq[f.categoryId][f.descId] || 0) + 1;
+    }
+  });
+
+  var incDescFreq = {};
+  income.forEach(function (doc) {
+    var f = parseFirestoreFields_(doc.fields);
+    if (f.status === 'DELETED') return;
+    if (f.categoryId && f.descId) {
+      incDescFreq[f.categoryId] = incDescFreq[f.categoryId] || {};
+      incDescFreq[f.categoryId][f.descId] = (incDescFreq[f.categoryId][f.descId] || 0) + 1;
+    }
+  });
+
+  var bizDescFreq = {};
+  business.forEach(function (doc) {
+    var f = parseFirestoreFields_(doc.fields);
+    if (f.status === 'DELETED') return;
+    if (f.categoryId && f.descId) {
+      bizDescFreq[f.categoryId] = bizDescFreq[f.categoryId] || {};
+      bizDescFreq[f.categoryId][f.descId] = (bizDescFreq[f.categoryId][f.descId] || 0) + 1;
+    }
+  });
+
+  var subMap = {};
+  Object.keys(subFreq).forEach(function (catId) {
+    var entries = Object.keys(subFreq[catId]).map(function (id) { return { id: id, count: subFreq[catId][id] }; });
+    entries.sort(function (a, b) { return b.count - a.count; });
+    subMap[catId] = entries.slice(0, 5).map(function (e) { return e.id; }); // топ-5, без "Інше"
+  });
+
+  function buildDescMap(freqObj) {
+    var map = {};
+    Object.keys(freqObj).forEach(function (catId) {
+      var entries = Object.keys(freqObj[catId]).map(function (id) { return { id: id, count: freqObj[catId][id] }; });
+      entries.sort(function (a, b) { return b.count - a.count; });
+      map[catId] = entries.map(function (e) { return e.id; }); // без ліміту
+    });
+    return map;
+  }
+
+  writeMapDoc_('dictionaries/expenseCategorySubcategories', subMap, PROJECT_ID, token);
+  writeMapDoc_('dictionaries/expenseCategoryDescriptions', buildDescMap(expDescFreq), PROJECT_ID, token);
+  writeMapDoc_('dictionaries/incomeCategoryDescriptions', buildDescMap(incDescFreq), PROJECT_ID, token);
+  writeMapDoc_('dictionaries/businessCategoryDescriptions', buildDescMap(bizDescFreq), PROJECT_ID, token);
+
+  firestorePatchDoc1_('dictionaries/expenseSubcategories', { ExSub_INSHE: 'Інше' }, PROJECT_ID, token);
+  firestorePatchDoc1_('dictionaries/expenseDescriptions', { ExDsc_INSHE: 'Інше' }, PROJECT_ID, token);
+  firestorePatchDoc1_('dictionaries/incomeDescriptions', { InDsc_INSHE: 'Інше' }, PROJECT_ID, token);
+  firestorePatchDoc1_('dictionaries/businessDescriptions', { BzDsc_INSHE: 'Інше' }, PROJECT_ID, token);
+
+  Logger.log('Категорій з підкатегоріями: ' + Object.keys(subMap).length);
+  Logger.log('subMap: ' + JSON.stringify(subMap));
+}
+
+function fetchAllDocs_(collection, projectId, token) {
+  var docs = [], pageToken = null;
+  do {
+    var url = 'https://firestore.googleapis.com/v1/projects/' + projectId
+      + '/databases/(default)/documents/' + collection + '?pageSize=300'
+      + (pageToken ? '&pageToken=' + pageToken : '');
+    var resp = UrlFetchApp.fetch(url, { headers: { Authorization: 'Bearer ' + token }, muteHttpExceptions: true });
+    if (resp.getResponseCode() !== 200) { Logger.log('Помилка: ' + resp.getContentText()); break; }
+    var json = JSON.parse(resp.getContentText());
+    (json.documents || []).forEach(function (d) { docs.push(d); });
+    pageToken = json.nextPageToken || null;
+  } while (pageToken);
+  return docs;
+}
+
+function writeMapDoc_(path, mapObj, projectId, token) {
+  var fields = {};
+  Object.keys(mapObj).forEach(function (catId) {
+    fields[catId] = { arrayValue: { values: mapObj[catId].map(function (id) { return { stringValue: id }; }) } };
+  });
+  var maskParams = Object.keys(fields).map(function (k) { return 'updateMask.fieldPaths=' + encodeURIComponent(k); });
+  var url = 'https://firestore.googleapis.com/v1/projects/' + projectId + '/databases/(default)/documents/' + path
+    + '?' + maskParams.join('&');
+  var resp = UrlFetchApp.fetch(url, {
+    method: 'patch', contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + token },
+    payload: JSON.stringify({ fields: fields }),
+    muteHttpExceptions: true
+  });
+  if (resp.getResponseCode() !== 200) Logger.log('Помилка запису ' + path + ': ' + resp.getContentText());
+}
+
+function firestorePatchDoc1_(path, obj, projectId, token) {
+  var fields = {};
+  var maskParams = [];
+  Object.keys(obj).forEach(function (key) {
+    var val = obj[key];
+    if (Array.isArray(val)) {
+      fields[key] = { arrayValue: { values: val.map(function (v) { return { stringValue: String(v) }; }) } };
+    } else if (typeof val === 'number') {
+      fields[key] = { integerValue: val };
+    } else {
+      fields[key] = { stringValue: String(val) };
+    }
+    maskParams.push('updateMask.fieldPaths=' + encodeURIComponent(key));
+  });
+
+  var url = 'https://firestore.googleapis.com/v1/projects/' + projectId
+    + '/databases/(default)/documents/' + path
+    + '?' + maskParams.join('&');
+
+  var resp = UrlFetchApp.fetch(url, {
+    method: 'patch',
+    contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + token },
+    payload: JSON.stringify({ fields: fields }),
+    muteHttpExceptions: true
+  });
+
+  if (resp.getResponseCode() !== 200) {
+    Logger.log('Помилка запису ' + path + ': ' + resp.getContentText());
+  }
+}
+
+// ══════════════════════════════════════════
+// ОДНОРАЗОВЕ ЗАПОВНЕННЯ "ІНШЕ" ДЛЯ ПОРОЖНІХ
+// subcategoryId (тільки expenses) та descId (усі три колекції)
+// Нічого не видаляє й не змінює, окрім порожніх полів.
+// Запустіть вручну ОДИН РАЗ.
+// ══════════════════════════════════════════
+function fillMissingInshe() {
+  var PROJECT_ID = 'expensesa';
+  var token = ScriptApp.getOAuthToken();
+
+  fillInsheForCollection_('expenses', 'ExDsc_INSHE', 'ExSub_INSHE', PROJECT_ID, token);
+  fillInsheForCollection_('income',   'InDsc_INSHE', null,          PROJECT_ID, token);
+  fillInsheForCollection_('business', 'BzDsc_INSHE', null,          PROJECT_ID, token);
+
+  Logger.log('Готово — усі порожні поля заповнено значеннями "Інше"');
+}
+
+function fillInsheForCollection_(collectionName, descInsheId, subInsheId, projectId, token) {
+  var docs = fetchAllDocs_(collectionName, projectId, token);
+  var updated = 0, skipped = 0;
+
+  docs.forEach(function(docRaw) {
+    var f = parseFirestoreFields_(docRaw.fields);
+    var docId = docRaw.name.split('/').pop();
+
+    var fieldsToUpdate = {};
+    var needsUpdate = false;
+
+    // Опис порожній — заповнюємо "Інше"
+    if (!f.descId) {
+      fieldsToUpdate.descId = { stringValue: descInsheId };
+      needsUpdate = true;
+    }
+
+    // Підкатегорія порожня — заповнюємо "Інше" (тільки для expenses)
+    if (subInsheId && !f.subcategoryId) {
+      fieldsToUpdate.subcategoryId = { stringValue: subInsheId };
+      needsUpdate = true;
+    }
+
+    if (!needsUpdate) { skipped++; return; }
+
+    var maskParams = Object.keys(fieldsToUpdate).map(function(k) {
+      return 'updateMask.fieldPaths=' + encodeURIComponent(k);
+    });
+    var url = 'https://firestore.googleapis.com/v1/projects/' + projectId
+      + '/databases/(default)/documents/' + collectionName + '/' + docId
+      + '?' + maskParams.join('&');
+
+    var resp = UrlFetchApp.fetch(url, {
+      method: 'patch',
+      contentType: 'application/json',
+      headers: { Authorization: 'Bearer ' + token },
+      payload: JSON.stringify({ fields: fieldsToUpdate }),
+      muteHttpExceptions: true
+    });
+
+    if (resp.getResponseCode() === 200) {
+      updated++;
+    } else {
+      Logger.log('Помилка оновлення ' + collectionName + '/' + docId + ': ' + resp.getContentText());
+    }
+  });
+
+  Logger.log(collectionName + ': оновлено ' + updated + ', пропущено (вже заповнені) ' + skipped);
 }
 
 // ── Тести ──

@@ -1132,6 +1132,16 @@
           <label class="lbl">Категорія</label>
           <div class="sel-wrap"><select id="fCat"></select></div>
         </div>
+        <div class="field" id="subcatField">
+          <label class="lbl">Підкатегорія <span
+              style="color:var(--sub);font-weight:400;text-transform:none;letter-spacing:0">(необов'язково)</span></label>
+          <div class="desc-wrap sel-wrap">
+            <input type="text" id="fSubcat" placeholder="Виберіть підкатегорію…" autocomplete="off" readonly
+              style="padding-right:36px;cursor:pointer" onclick="openSubcatDropdown('fSubcat','fSubcatDrop')"
+              oninput="onSubcatFreeInput('fSubcat','fSubcatDrop')" onblur="hideDescDrop('fSubcatDrop')" />
+            <div class="desc-drop" id="fSubcatDrop"></div>
+          </div>
+        </div>
         <div class="field">
           <label class="lbl">Опис</label>
           <div class="desc-wrap">
@@ -1268,6 +1278,17 @@
       <div class="field"><label class="lbl">Категорія</label>
         <div class="sel-wrap"><select id="eCat"></select></div>
       </div>
+      <div class="field" id="eSubcatField" style="display:none">
+        <label class="lbl">Підкатегорія <span
+            style="color:var(--sub);font-weight:400;text-transform:none;letter-spacing:0">(необов'язково)</span></label>
+        <div class="desc-wrap sel-wrap">
+          <input type="text" id="eSubcat" placeholder="Виберіть підкатегорію…" autocomplete="off" readonly
+            style="padding-right:36px;cursor:pointer" onclick="openSubcatDropdownEdit('eSubcat','eSubcatDrop')"
+            oninput="onSubcatFreeInputEdit('eSubcat','eSubcatDrop')" onblur="hideDescDrop('eSubcatDrop')" />
+          <div class="desc-drop" id="eSubcatDrop"></div>
+        </div>
+      </div>
+
       <div class="field">
         <label class="lbl">Опис</label>
         <div class="desc-wrap">
@@ -1293,7 +1314,7 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykvK1k4wp-_x09Ca1BNFgTqnWcyzTgw2hu8Ns2rJcvkXUzaIvmGilgmEiLsWwkYFgq2w/exec';
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzlgLTYfaJnR4SpUgAdu3xoklo699P-TcULLlEQsTQKQTsM6ySGPkjl7kmrzX_KWjwlkA/exec';
     const GOOGLE_CLIENT_ID = '647272988527-nuhp8d8iut2t4u7384e41cm1bejn8m38.apps.googleusercontent.com';
 
     // Префікси UUID — має збігатися з ALLOWED_USERS в Code.gs
@@ -1418,6 +1439,8 @@
       const btn = document.getElementById('saveBtn');
       btn.className = 'save-btn ' + TAB_CFG[t].cls; btn.textContent = TAB_CFG[t].label;
       buildSel('fCat', cats(t)); updateRateBadge();
+      document.getElementById('fCat').onchange = updateSubcatVisibility;
+      updateSubcatVisibility();
     }
     function buildSel(id, items, sel = '') {
       document.getElementById(id).innerHTML = items.map(c => `<option value="${x(c)}"${c === sel ? ' selected' : ''}>${x(c)}</option>`).join('');
@@ -1471,8 +1494,104 @@
       drop.classList.add('show');
     }
 
-    // ── Subcat Autocomplete ──
-    
+    // ── Subcat Autocomplete (макс. 5 + приховане "Інше") ──
+    let subcatFreeText = false, eSubcatFreeText = false;
+
+    function updateSubcatVisibility() {
+      document.getElementById('subcatField').style.display = addTab === 'exp' ? '' : 'none';
+      resetSubcatField();
+    }
+    function resetSubcatField() {
+      subcatFreeText = false;
+      const input = document.getElementById('fSubcat');
+      if (input) { input.setAttribute('readonly', 'readonly'); input.placeholder = 'Виберіть підкатегорію…'; input.value = ''; }
+    }
+    function resetSubcatFieldEdit() {
+      eSubcatFreeText = false;
+      const input = document.getElementById('eSubcat');
+      if (input) { input.setAttribute('readonly', 'readonly'); input.placeholder = 'Виберіть підкатегорію…'; }
+    }
+
+    function knownSubcats(catName) {
+      const freq = {};
+      allRecords.filter(r => r._t === 'exp' && r.category === catName && r.subcategory && r.subcategory !== 'Інше')
+        .forEach(r => { freq[r.subcategory] = (freq[r.subcategory] || 0) + 1; });
+      return Object.keys(freq).sort((a, b) => freq[b] - freq[a]);
+    }
+
+    function openSubcatDropdown(inputId, dropId) {
+      if (subcatFreeText) return;
+      const input = document.getElementById(inputId), drop = document.getElementById(dropId);
+      const catName = document.getElementById('fCat').value;
+      const known = knownSubcats(catName).slice(0, 5);
+
+      let html = known.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
+      if (known.length < 5) html += `<div class="desc-opt" data-other="1" style="color:var(--acc);font-weight:600">… Інша (ввести текст)</div>`;
+      drop.innerHTML = html;
+
+      drop.querySelectorAll('.desc-opt').forEach(el => {
+        el.addEventListener('mousedown', e => {
+          e.preventDefault();
+          if (el.dataset.other) {
+            subcatFreeText = true;
+            input.removeAttribute('readonly'); input.value = ''; input.placeholder = 'Введіть нову підкатегорію…';
+            drop.classList.remove('show'); input.focus();
+          } else { input.value = el.dataset.val; drop.classList.remove('show'); }
+        });
+      });
+      drop.classList.add('show');
+    }
+    function onSubcatFreeInput(inputId, dropId) {
+      if (!subcatFreeText) return;
+      const input = document.getElementById(inputId), drop = document.getElementById(dropId);
+      const val = input.value.trim().toLowerCase();
+      if (!val) { drop.classList.remove('show'); return; }
+      const catName = document.getElementById('fCat').value;
+      const items = knownSubcats(catName).filter(d => d.toLowerCase().includes(val)).slice(0, 7);
+      if (!items.length) { drop.classList.remove('show'); return; }
+      drop.innerHTML = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
+      drop.querySelectorAll('.desc-opt').forEach(el => {
+        el.addEventListener('mousedown', e => { e.preventDefault(); input.value = el.dataset.val; drop.classList.remove('show'); });
+      });
+      drop.classList.add('show');
+    }
+
+    function openSubcatDropdownEdit(inputId, dropId) {
+      if (eSubcatFreeText) return;
+      const input = document.getElementById(inputId), drop = document.getElementById(dropId);
+      const catName = document.getElementById('eCat').value;
+      const known = knownSubcats(catName).slice(0, 5);
+
+      let html = known.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
+      if (known.length < 5) html += `<div class="desc-opt" data-other="1" style="color:var(--acc);font-weight:600">… Інша (ввести текст)</div>`;
+      drop.innerHTML = html;
+
+      drop.querySelectorAll('.desc-opt').forEach(el => {
+        el.addEventListener('mousedown', e => {
+          e.preventDefault();
+          if (el.dataset.other) {
+            eSubcatFreeText = true;
+            input.removeAttribute('readonly'); input.value = ''; input.placeholder = 'Введіть нову підкатегорію…';
+            drop.classList.remove('show'); input.focus();
+          } else { input.value = el.dataset.val; drop.classList.remove('show'); }
+        });
+      });
+      drop.classList.add('show');
+    }
+    function onSubcatFreeInputEdit(inputId, dropId) {
+      if (!eSubcatFreeText) return;
+      const input = document.getElementById(inputId), drop = document.getElementById(dropId);
+      const val = input.value.trim().toLowerCase();
+      if (!val) { drop.classList.remove('show'); return; }
+      const catName = document.getElementById('eCat').value;
+      const items = knownSubcats(catName).filter(d => d.toLowerCase().includes(val)).slice(0, 7);
+      if (!items.length) { drop.classList.remove('show'); return; }
+      drop.innerHTML = items.map(d => `<div class="desc-opt" data-val="${x(d)}">${x(d)}</div>`).join('');
+      drop.querySelectorAll('.desc-opt').forEach(el => {
+        el.addEventListener('mousedown', e => { e.preventDefault(); input.value = el.dataset.val; drop.classList.remove('show'); });
+      });
+      drop.classList.add('show');
+    }
 
     function hideDescDrop(id) { setTimeout(() => document.getElementById(id)?.classList.remove('show'), 200); }
     function pickDesc(inputId, val, dropId) { document.getElementById(inputId).value = val; document.getElementById(dropId).classList.remove('show'); }
@@ -1487,7 +1606,8 @@
       if (!amt || +amt === 0) { showToast('Введіть суму', 'err'); return; }
       if (!cur) { showToast('Вкажіть валюту', 'err'); return; }
       const uuid = genUUID(userEmail);
-      const payload = { action: 'addRecord', sheet: TAB_CFG[addTab].sheet, uuid, date, category: cat, amount: amt, desc, currency: cur, offline: !navigator.onLine };
+      const subcategory = addTab === 'exp' ? (document.getElementById('fSubcat').value.trim() || 'Інше') : '';
+      const payload = { action: 'addRecord', sheet: TAB_CFG[addTab].sheet, uuid, date, category: cat, amount: amt, desc, currency: cur, subcategory, offline: !navigator.onLine };
       const btn = document.getElementById('saveBtn');
       btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Збереження…';
       if (!navigator.onLine) { offlineQueue.push(payload); saveQueue(); showToast('⚡ Збережено офлайн', 'info'); afterSave(btn); return; }
@@ -1500,7 +1620,7 @@
       } catch (e) { offlineQueue.push(payload); saveQueue(); showToast('⚡ Збережено офлайн', 'info'); afterSave(btn); }
     }
     function afterSave(btn) {
-      document.getElementById('fAmt').value = ''; document.getElementById('fDesc').value = '';
+      document.getElementById('fAmt').value = ''; document.getElementById('fDesc').value = ''; resetSubcatField();
       btn.disabled = false; btn.textContent = TAB_CFG[addTab].label;
       updateSyncBadge(); setTimeout(() => document.getElementById('fAmt').focus(), 150);
     }
@@ -1646,6 +1766,10 @@
       }
       document.getElementById('eDesc').value = rec.desc || '';
       document.getElementById('eDescDrop').classList.remove('show');
+      resetSubcatFieldEdit();
+      document.getElementById('eSubcatField').style.display = rec._t === 'exp' ? '' : 'none';
+      document.getElementById('eSubcat').value = rec.subcategory || '';
+      document.getElementById('eSubcatDrop').classList.remove('show');
       const btn = document.getElementById('editSaveBtn');
       btn.className = 'save-btn ' + rec._t; btn.textContent = 'Зберегти зміни';
       document.getElementById('editOv').classList.add('show');
@@ -1669,7 +1793,8 @@
       btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Збереження…';
       const isoDate = document.getElementById('eDate').value;
       const dispDate = isoDate.split('-').reverse().join('.');
-      const newData = { date: dispDate, category: document.getElementById('eCat').value, amount: +document.getElementById('eAmt').value, currency, desc: document.getElementById('eDesc').value };
+      const subcategory = editRec._t === 'exp' ? (document.getElementById('eSubcat').value.trim() || 'Інше') : '';
+      const newData = { date: dispDate, category: document.getElementById('eCat').value, amount: +document.getElementById('eAmt').value, currency, desc: document.getElementById('eDesc').value, subcategory };
       try {
         const r = await api({ action: 'updateRecord', sheet: TAB_CFG[editRec._t].sheet, row: editRec.row, date: isoDate, ...newData });
         if (r.status === 'ok') {
