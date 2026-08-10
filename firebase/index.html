@@ -2805,11 +2805,15 @@
         el.dataset.ptrInit = '1';
         let sy = 0, active = false, pulling = false;
         el.addEventListener('touchstart', e => {
+          // Дотик усередині випадаючого списку (наприклад, підкатегорій) —
+          // не втручаємось, даємо йому скролитись власним, нативним чином
+          if (e.target.closest('.desc-drop')) { active = false; return; }
           if (el.scrollTop === 0) { sy = e.touches[0].clientY; active = true; pulling = false; }
           else active = false;
         }, { passive: true });
         el.addEventListener('touchmove', e => {
           if (!active) return;
+          if (e.target.closest('.desc-drop')) { active = false; return; }
           const dy = e.touches[0].clientY - sy;
           if (dy > 0 && el.scrollTop === 0) {
             pulling = true;
