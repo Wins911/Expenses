@@ -1382,6 +1382,7 @@
         if (r.status === 'ok') myPrefix = r.prefix;
       } catch (e) { }
       buildCurrencyPills(); switchAddTab('exp');
+      loadRecords(); // запускаємо у фоні, без очікування — наповнює allRecords для підказок підкатегорій одразу при старті
       if (appStarted) return; // avoid duplicate intervals/listeners if called twice
       appStarted = true;
       initCarouselSwipe(); initPTR();
