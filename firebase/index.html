@@ -1418,11 +1418,11 @@
       'currencies', 'months', 'counters'
     ];
 
-function categoriesOrderFixed(type) {
-    const dictName = type === 'exp' ? 'expenseCategories' : 'incomeCategories';
+    function categoriesOrderFixed(type) {
+      const dictName = type === 'exp' ? 'expenseCategories' : 'incomeCategories';
       const dict = dictionaries[dictName] || {};
-        return Object.keys(dict).sort().map(id => dict[id]);
-        }
+      return Object.keys(dict).sort().map(id => dict[id]);
+    }
 
     async function loadDictionaries() {
       try {
@@ -1523,32 +1523,32 @@ function categoriesOrderFixed(type) {
     }
     let appStarted = false;
     async function startApp() {
-        document.getElementById('loginScreen').classList.remove('active');
-          document.getElementById('appScreen').classList.add('active');
-            document.getElementById('userBadge').textContent = userEmail;
-              updateOfflineBar(); updateSyncBadge(); setToday();
+      document.getElementById('loginScreen').classList.remove('active');
+      document.getElementById('appScreen').classList.add('active');
+      document.getElementById('userBadge').textContent = userEmail;
+      updateOfflineBar(); updateSyncBadge(); setToday();
 
-                // Довідники: показуємо кеш миттєво (якщо є), форму будуємо одразу, мережу оновлюємо у фоні
-                  const cachedDict = await cGet('dictionaries');
-                    if (cachedDict) { dictionaries = cachedDict; dictionariesLoaded = true; }
+      // Довідники: показуємо кеш миттєво (якщо є), форму будуємо одразу, мережу оновлюємо у фоні
+      const cachedDict = await cGet('dictionaries');
+      if (cachedDict) { dictionaries = cachedDict; dictionariesLoaded = true; }
 
-                      buildCurrencyPills(); switchAddTab('exp');
-                        loadRecords(); // фон — наповнює allRecords для підказок
+      buildCurrencyPills(); switchAddTab('exp');
+      loadRecords(); // фон — наповнює allRecords для підказок
 
-                          // Якщо кешу не було — обов'язково чекаємо реальні довідники, інакше форма буде порожня
-                            if (!cachedDict) {
-                                await loadDictionaries();
-                                    buildCurrencyPills(); switchAddTab('exp'); // перебудовуємо форму вже з реальними даними
-                                      } else {
-                                          loadDictionaries(); // фон — тихо освіжує кеш, форма вже показана
-                                            }
+      // Якщо кешу не було — обов'язково чекаємо реальні довідники, інакше форма буде порожня
+      if (!cachedDict) {
+        await loadDictionaries();
+        buildCurrencyPills(); switchAddTab('exp'); // перебудовуємо форму вже з реальними даними
+      } else {
+        loadDictionaries(); // фон — тихо освіжує кеш, форма вже показана
+      }
 
-                                              if (appStarted) return;
-                                                appStarted = true;
-                                                  initCarouselSwipe(); initPTR();
-                                                    tokenRefreshDone = false;
-                                                      setInterval(checkTokenExpiry, 1800000);
-                                                      }
+      if (appStarted) return;
+      appStarted = true;
+      initCarouselSwipe(); initPTR();
+      tokenRefreshDone = false;
+      setInterval(checkTokenExpiry, 18000000);
+    }
 
     function checkTokenExpiry() {
       if (!accessToken || tokenRefreshDone) return;
@@ -1582,10 +1582,10 @@ function categoriesOrderFixed(type) {
 
     // ── Settings ──
     function categoriesOrderFixed(type) {
-        const dictName = type === 'exp' ? 'expenseCategories' : 'incomeCategories';
-          const dict = dictionaries[dictName] || {};
-            return Object.keys(dict).sort().map(id => dict[id]); // назви, у фіксованому порядку за ID
-            }
+      const dictName = type === 'exp' ? 'expenseCategories' : 'incomeCategories';
+      const dict = dictionaries[dictName] || {};
+      return Object.keys(dict).sort().map(id => dict[id]); // назви, у фіксованому порядку за ID
+    }
     // Повертає масив {id, name}, напр. [{id:'ExCat00001',name:'Житло'}, ...]
     function cats(t) {
       const dictName = t === 'exp' ? 'expenseCategories' : t === 'inc' ? 'incomeCategories' : 'businessCategories';
@@ -2329,7 +2329,7 @@ function categoriesOrderFixed(type) {
       const fm = anFilters.monthly || {}, fa = anFilters.annual || {}, fn = anFilters.analyz || {};
       function mSel(id, cur) { document.getElementById(id).innerHTML = months.map(m => `<option${m === cur ? ' selected' : ''}>${m}</option>`).join(''); }
       function ySel(id, cur) { document.getElementById(id).innerHTML = years.map(y => `<option${String(y) === String(cur) ? ' selected' : ''}>${y}</option>`).join(''); }
-      function cSel(id, cur){ document.getElementById(id).innerHTML=expCats.map(c=>`<option value="${x(c.id)}"${c.id===cur?' selected':''}>${x(c.name)}</option>`).join(''); }
+      function cSel(id, cur) { document.getElementById(id).innerHTML = expCats.map(c => `<option value="${x(c.id)}"${c.id === cur ? ' selected' : ''}>${x(c.name)}</option>`).join(''); }
       mSel('fMonthlyMonth', fm.month); ySel('fMonthlyYear', fm.year); cSel('fMonthlyCategory', fm.category);
       mSel('fAnnualMonth', fa.month); ySel('fAnnualYear', fa.year);
       mSel('fAnalyzMonth', fn.month); ySel('fAnalyzYear', fn.year); cSel('fAnalyzCategory', fn.category);
@@ -2439,7 +2439,7 @@ function categoriesOrderFixed(type) {
       const balance = { headers, rows: [['Дохід', '', ...incByMonth], ['Витрати', '', ...expByMonth], ['Баланс', '', ...balByMonth]] };
 
       function grid(type) {
-        const cats = categoriesOrderFixed(type); 
+        const cats = categoriesOrderFixed(type);
         const rows = cats.map(cat => {
           const vals = months.map(() => 0);
           allRecords.forEach(r => {
