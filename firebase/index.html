@@ -1367,7 +1367,6 @@
 
 
     // Префікси UUID — має збігатися з ALLOWED_USERS в Code.gs
-    let myPrefix = 'XX'; // прийде з сервера після входу
     const FILTER_SHEETS = { monthly: 'Monthly Overview', annual: 'Annual Overview', analyz: 'Аналіз' };
     const FILTER_CELLS = {
       monthly: { month: 'K4', year: 'K6', category: 'K8' },
@@ -1386,7 +1385,7 @@
     // стовпці товщі/тонші — не впливає на кількість чи компонування. ═══
     const MAX_BAR_THICKNESS = 26; // px
 
-    let accessToken = '', userEmail = '', settings = null;
+    let accessToken = '', userEmail = '';
     let addTab = 'exp', anTab = 'monthly', rFilter = 'all', selectedCur = 'UAH';
     let allRecords = [], editRec = null, offlineQueue = JSON.parse(localStorage.getItem('offlineQ') || '[]');
     let pendingRates = JSON.parse(localStorage.getItem('pendingRates') || '[]');
@@ -1418,6 +1417,13 @@
       'expenseCategoryDescriptions', 'incomeCategoryDescriptions', 'businessCategoryDescriptions',
       'currencies', 'months', 'counters'
     ];
+
+function categoriesOrderFixed(type) {
+    const dictName = type === 'exp' ? 'expenseCategories' : 'incomeCategories';
+      const dict = dictionaries[dictName] || {};
+        return Object.keys(dict).sort().map(id => dict[id]);
+        }
+
     async function loadDictionaries() {
       try {
         const results = await Promise.all(
@@ -1517,25 +1523,32 @@
     }
     let appStarted = false;
     async function startApp() {
-      document.getElementById('loginScreen').classList.remove('active');
-      document.getElementById('appScreen').classList.add('active');
-      document.getElementById('userBadge').textContent = userEmail;
-      updateOfflineBar(); updateSyncBadge(); setToday();
-      await loadDictionaries();
-      await loadSettings();
-      try {
-        const r = await api({ action: 'whoAmI' });
-        if (r.status === 'ok') myPrefix = r.prefix;
-      } catch (e) { }
-      buildCurrencyPills(); switchAddTab('exp');
-      loadRecords(); // запускаємо у фоні, без очікування — наповнює allRecords для підказок одразу при старті
-      if (appStarted) return; // avoid duplicate intervals/listeners if called twice
-      appStarted = true;
-      initCarouselSwipe(); initPTR();
-      tokenRefreshDone = false;
-      // Check token expiry periodically - only shows login screen, never auto-reloads
-      setInterval(checkTokenExpiry, 1800000);
-    }
+        document.getElementById('loginScreen').classList.remove('active');
+          document.getElementById('appScreen').classList.add('active');
+            document.getElementById('userBadge').textContent = userEmail;
+              updateOfflineBar(); updateSyncBadge(); setToday();
+
+                // Довідники: показуємо кеш миттєво (якщо є), форму будуємо одразу, мережу оновлюємо у фоні
+                  const cachedDict = await cGet('dictionaries');
+                    if (cachedDict) { dictionaries = cachedDict; dictionariesLoaded = true; }
+
+                      buildCurrencyPills(); switchAddTab('exp');
+                        loadRecords(); // фон — наповнює allRecords для підказок
+
+                          // Якщо кешу не було — обов'язково чекаємо реальні довідники, інакше форма буде порожня
+                            if (!cachedDict) {
+                                await loadDictionaries();
+                                    buildCurrencyPills(); switchAddTab('exp'); // перебудовуємо форму вже з реальними даними
+                                      } else {
+                                          loadDictionaries(); // фон — тихо освіжує кеш, форма вже показана
+                                            }
+
+                                              if (appStarted) return;
+                                                appStarted = true;
+                                                  initCarouselSwipe(); initPTR();
+                                                    tokenRefreshDone = false;
+                                                      setInterval(checkTokenExpiry, 1800000);
+                                                      }
 
     function checkTokenExpiry() {
       if (!accessToken || tokenRefreshDone) return;
@@ -1568,10 +1581,11 @@
     }
 
     // ── Settings ──
-    async function loadSettings() {
-      try { const r = await api({ action: 'getSettings' }); if (r.status === 'ok') { settings = r; cSet('settings', r); } }
-      catch (e) { const c = await cGet('settings'); if (c) settings = c; }
-    }
+    function categoriesOrderFixed(type) {
+        const dictName = type === 'exp' ? 'expenseCategories' : 'incomeCategories';
+          const dict = dictionaries[dictName] || {};
+            return Object.keys(dict).sort().map(id => dict[id]); // назви, у фіксованому порядку за ID
+            }
     // Повертає масив {id, name}, напр. [{id:'ExCat00001',name:'Житло'}, ...]
     function cats(t) {
       const dictName = t === 'exp' ? 'expenseCategories' : t === 'inc' ? 'incomeCategories' : 'businessCategories';
@@ -2425,7 +2439,7 @@
       const balance = { headers, rows: [['Дохід', '', ...incByMonth], ['Витрати', '', ...expByMonth], ['Баланс', '', ...balByMonth]] };
 
       function grid(type) {
-        const cats = type === 'exp' ? (settings?.expenseCategoriesOrder || []) : (settings?.incomeCategoriesOrder || []);
+        const cats = categoriesOrderFixed(type); 
         const rows = cats.map(cat => {
           const vals = months.map(() => 0);
           allRecords.forEach(r => {
