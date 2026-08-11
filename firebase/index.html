@@ -1623,7 +1623,7 @@ function categoriesOrderFixed(type) {
     }
     function baseCurrencyCode() { return dictionaries.currencies?.baseCurrency || 'USD'; }
 
-    const getMonths = () => settings?.months?.length ? settings.months : MONTH_UK;
+    const getMonths = () => dictionaries.months?.list?.length ? dictionaries.months.list : MONTH_UK;
     const getYears = () => { const y = new Date().getFullYear(); return [y - 3, y - 2, y - 1, y, y + 1].map(String); };
 
     // ── Add Form ──
@@ -2079,7 +2079,7 @@ function categoriesOrderFixed(type) {
           if (rFilter === 'all' && r._t === 'biz') return s; // Бізнес не входить у баланс вкладки "Всі"
           return s + recordSign(r) * (+r.usd || 0);
         }, 0);
-        const baseCur = settings?.mainCurrency || 'USD';
+        const baseCur = baseCurrencyCode();
         return `
     <div class="month-group">
       <div class="month-hdr" onclick="toggleMonth('${key}')">
@@ -2309,7 +2309,7 @@ function categoriesOrderFixed(type) {
     function ensureFilterDefaults() {
       const now = new Date();
       const curMonth = MONTH_UK[now.getMonth()], curYear = now.getFullYear();
-      const firstCat = (settings?.expenseCategories || [])[0] || '';
+      const firstCat = cats('exp')[0]?.id || '';
       if (!anFilters.monthly || !anFilters.monthly.month) anFilters.monthly = { month: curMonth, year: curYear, category: firstCat };
       if (!anFilters.annual || !anFilters.annual.month) anFilters.annual = { month: curMonth, year: curYear };
       if (!anFilters.analyz || !anFilters.analyz.month) anFilters.analyz = { month: curMonth, year: curYear, category: firstCat };
@@ -2325,11 +2325,11 @@ function categoriesOrderFixed(type) {
       renderAnTab(t);
     }
     function buildFilterUi() {
-      const months = getMonths(), years = getYears(), expCats = settings?.expenseCategories || [];
+      const months = getMonths(), years = getYears(), expCats = cats('exp');
       const fm = anFilters.monthly || {}, fa = anFilters.annual || {}, fn = anFilters.analyz || {};
       function mSel(id, cur) { document.getElementById(id).innerHTML = months.map(m => `<option${m === cur ? ' selected' : ''}>${m}</option>`).join(''); }
       function ySel(id, cur) { document.getElementById(id).innerHTML = years.map(y => `<option${String(y) === String(cur) ? ' selected' : ''}>${y}</option>`).join(''); }
-      function cSel(id, cur) { document.getElementById(id).innerHTML = expCats.map(c => `<option value="${x(c)}"${c === cur ? ' selected' : ''}>${x(c)}</option>`).join(''); }
+      function cSel(id, cur){ document.getElementById(id).innerHTML=expCats.map(c=>`<option value="${x(c.id)}"${c.id===cur?' selected':''}>${x(c.name)}</option>`).join(''); }
       mSel('fMonthlyMonth', fm.month); ySel('fMonthlyYear', fm.year); cSel('fMonthlyCategory', fm.category);
       mSel('fAnnualMonth', fa.month); ySel('fAnnualYear', fa.year);
       mSel('fAnalyzMonth', fn.month); ySel('fAnalyzYear', fn.year); cSel('fAnalyzCategory', fn.category);
@@ -2400,7 +2400,7 @@ function categoriesOrderFixed(type) {
       const match = r => { const p = parseDMYParts(r.date); return p && p.m - 1 === mIdx && p.y === +year; };
       const inc = allRecords.filter(r => r._t === 'inc' && match(r));
       const exp = allRecords.filter(r => r._t === 'exp' && match(r));
-      const sub = exp.filter(r => r.category === category);
+      const sub = allRecords.filter(r => r._t === 'sub' && match(r));
       return {
         income: { rows: groupSum(inc, 'category') },
         expenses: { rows: groupSum(exp, 'category'), stack: buildCategoryStack(exp) },
@@ -2856,11 +2856,6 @@ function categoriesOrderFixed(type) {
     }
 
     // ── Utils ──
-    function genUUID(email) {
-      const pre = myPrefix;
-      const u = typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); });
-      return pre + '_' + u;
-    }
     function x(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
     let toastT = null;
     function showToast(msg, type = 'ok') {
