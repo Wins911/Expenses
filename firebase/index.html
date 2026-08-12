@@ -2223,7 +2223,7 @@
         const amountUSD = amount * rateUSD;
 
         const updateData = {
-          date: dispDate, categoryId, amount, currencyId, descId,
+          date: dispDate, categoryId: catId, amount, currencyId, descId,
           subcategoryId,
           rateUSD, amountUSD,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -2247,7 +2247,7 @@
           allRecords[idx] = {
             ...allRecords[idx],
             date: dispDate, amount,
-            categoryId, category: resolveName(catDictName, catId),
+            categoryId: catId, category: resolveName(catDictName, catId),
             descId, desc: resolveName(descDictName, descId),
             subcategoryId, subcategory: resolveName('expenseSubcategories', subcategoryId),
             currencyId, currency,
@@ -2396,18 +2396,18 @@
     }
 
     function computeMonthlyData(monthName, year, category) {
-  const mIdx = MONTH_UK.indexOf(monthName);
-  const match = r => { const p = parseDMYParts(r.date); return p && p.m - 1 === mIdx && p.y === +year; };
-  const inc = allRecords.filter(r => r._t === 'inc' && match(r));
-  const exp = allRecords.filter(r => r._t === 'exp' && match(r));
-  const catName = resolveName('expenseCategories', category) || category;
-  const sub = exp.filter(r => r.category === catName);
-  return {
-    income: { rows: groupSum(inc, 'category') },
-    expenses: { rows: groupSum(exp, 'category') },
-    subcat: { rows: groupSum(sub, 'desc'), subcatSummary: groupSum(sub.filter(r => r.subcategory), 'subcategory') }
-  };
-}
+      const mIdx = MONTH_UK.indexOf(monthName);
+      const match = r => { const p = parseDMYParts(r.date); return p && p.m - 1 === mIdx && p.y === +year; };
+      const inc = allRecords.filter(r => r._t === 'inc' && match(r));
+      const exp = allRecords.filter(r => r._t === 'exp' && match(r));
+      const catName = resolveName('expenseCategories', category) || category;
+      const sub = exp.filter(r => r.category === catName);
+      return {
+        income: { rows: groupSum(inc, 'category') },
+        expenses: { rows: groupSum(exp, 'category') },
+        subcat: { rows: groupSum(sub, 'desc'), subcatSummary: groupSum(sub.filter(r => r.subcategory), 'subcategory') }
+      };
+    }
 
     function buildCategoryStack(records) {
       const cats = [...new Set(records.map(r => r.category))];
@@ -2456,10 +2456,10 @@
     }
 
     function computeAnalyzData(startMonthName, startYear, category) {
-  const thisMonths = rollingMonths(startMonthName, startYear);
-  const prevMonths = rollingMonths(startMonthName, +startYear - 1);
-  const catName = resolveName('expenseCategories', category) || category;
-    function inSet(r, monthsSet) {
+      const thisMonths = rollingMonths(startMonthName, startYear);
+      const prevMonths = rollingMonths(startMonthName, +startYear - 1);
+      const catName = resolveName('expenseCategories', category) || category;
+      function inSet(r, monthsSet) {
         const p = parseDMYParts(r.date); if (!p) return false;
         return monthsSet.some(mm => mm.year === p.y && MONTH_UK.indexOf(mm.name) === p.m - 1);
       }
