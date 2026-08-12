@@ -2173,7 +2173,7 @@
       if (!eCurSel) return null;
       const val = eCurSel.value;
       if (val === '__other__') {
-        return (document.getElementById('eCurCustom')?.value || '').trim().toUpperCase();
+        return (document.getElementById('eCurOther')?.value || '').trim().toUpperCase();
       }
       // Перетворюємо ID валюти (напр. Cur01) на її ISO-код (напр. USD, EUR) через довідник
       return resolveName('currencies', val) || val;
@@ -2181,8 +2181,7 @@
 
     async function saveEdit() {
       if (!editRec) return;
-      const currency = editActiveCur();
-      if (!currency) { showToast('Вкажіть валюту', 'err'); return; }
+      if (eCurSel === '__other__' && !document.getElementById('eCurOther')?.value.trim()) { showToast('Вкажіть валюту', 'err'); return; }
       const btn = document.getElementById('editSaveBtn');
       btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Збереження…';
       const isoDate = document.getElementById('eDate').value; // Формат YYYY-MM-DD
@@ -2194,11 +2193,17 @@
 
       try {
         const eCurSel = document.getElementById('eCur').value;
-        const currencyId = eCurSel === '__other__' ? await resolveOrCreateCurrency(currency) : eCurSel;
+        let currencyId, curCode;
 
-        // Гарантовано отримуємо ISO-код валюти у верхньому регістрі (напр. "EUR", "PLN", "USD")
-        const curCode = (resolveName('currencies', currencyId) || currency || eCurSel).trim().toUpperCase();
-
+        if (eCurSel === '__other__') {
+          curCode = (document.getElementById('eCurOther')?.value || '').trim().toUpperCase();
+          if (!curCode) { showToast('Введіть код валюти', 'err'); btn.disabled = false; btn.textContent = 'Зберегти зміни'; return; }
+          currencyId = await resolveOrCreateCurrency(curCode); // створює новий запис у dictionaries/currencies, якщо такого коду ще нема
+        } else {
+          currencyId = eCurSel;
+          curCode = resolveName('currencies', currencyId);
+          if (!curCode) { showToast('Не вдалося визначити валюту — спробуйте ще раз', 'err'); btn.disabled = false; btn.textContent = 'Зберегти зміни'; return; }
+        }
         const descDictName = editRec._t === 'exp' ? 'expenseDescriptions' : editRec._t === 'inc' ? 'incomeDescriptions' : 'businessDescriptions';
         const descPrefix = editRec._t === 'exp' ? 'ExDsc' : editRec._t === 'inc' ? 'InDsc' : 'BzDsc';
         const descInsheId = editRec._t === 'exp' ? 'ExDsc_INSHE' : editRec._t === 'inc' ? 'InDsc_INSHE' : 'BzDsc_INSHE';
