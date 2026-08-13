@@ -1100,11 +1100,7 @@
     <div class="login-title">Сімейний бюджет</div>
     <div class="login-sub">Увійдіть через Google щоб продовжити</div>
     <div class="login-card">
-      <div id="googleBtn"></div>
-      <button onclick="firebaseLogin()"
-        style="margin-top:12px;padding:14px 24px;border-radius:12px;border:none;background:#4d8ef0;color:#fff;font-weight:700;cursor:pointer">Увійти
-        через Firebase (тест)</button>
-      <div id="fbTestResult" style="margin-top:16px;font-size:13px;color:var(--sub);text-align:center"></div>
+      <button onclick="loginWithGoogle()" style="width:100%;padding:16px;border-radius:14px;border:none;background:#4d8ef0;color:#fff;font-weight:700;font-size:16px;cursor:pointer">Увійти через Google</button>
       <div style="font-size:13px;color:var(--exp);display:none" id="loginErr">Доступ заборонено</div>
     </div>
   </div>
@@ -1349,21 +1345,7 @@
       // unimplemented — старий браузер без підтримки (не критично)
     });
 
-    // ── Крок 2: реальний вхід через Firebase Auth ──
-    function firebaseLogin() {
-      const provider = new firebase.auth.GoogleAuthProvider();
-      fbAuth.signInWithPopup(provider)
-        .then(async result => {
-          userEmail = result.user.email;
-          // Отримуємо Firebase ID-токен — він теж JWT з email/exp,
-          // сумісний з вашим verifyToken() у Code.gs
-          accessToken = await result.user.getIdToken();
-          startApp();
-        })
-        .catch(err => {
-          showToast('Помилка входу: ' + err.message, 'err');
-        });
-    }
+  
 
 
     // Префікси UUID — має збігатися з ALLOWED_USERS в Code.gs
@@ -1396,7 +1378,6 @@
     let anFilters = {}, charts = {}, curSlide = 0, lpTimer = null;
     let expandedMonths = new Set();
     let cubeTipTimer = null;
-    let tokenRefreshDone = false;
 
     // ── Довідники (dictionaries) — категорії/підкатегорії/описи/валюти через ID ──
     let dictionaries = {}; // { expenseCategories:{ExCat00001:'Житло',...}, currencies:{Cur01:'USD',...,baseCurrency:'USD',localCurrency:'UAH'}, ... }
@@ -1503,24 +1484,26 @@
     }
 
     // ── OAuth ──
-    window.onload = function () {
-      const tk = localStorage.getItem('gToken'), em = localStorage.getItem('gEmail');
-      if (tk && em) { accessToken = tk; userEmail = em; startApp(); return; }
-      google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleCred });
-      google.accounts.id.renderButton(document.getElementById('googleBtn'), { theme: 'filled_black', size: 'large', width: 300 });
-      // Note: no auto_select / no prompt() — these can cause repeated silent
-      // re-authentication loops (and page "flicker") when the same Google
-      // account is signed in on multiple devices at once. Login is manual only.
-      window.addEventListener('online', () => { updateOfflineBar(); resolvePendingRates(); });
-      window.addEventListener('offline', updateOfflineBar);
-    };
-    function handleCred(resp) {
-      const pl = JSON.parse(atob(resp.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-      userEmail = pl.email || ''; accessToken = resp.credential;
-      localStorage.setItem('gToken', accessToken); localStorage.setItem('gEmail', userEmail);
-      tokenRefreshDone = false;
-      startApp();
-    }
+    // ── OAuth (єдиний шлях — Firebase Auth, сесія тримається сама, без ручних перевірок) ──
+window.addEventListener('online', () => { updateOfflineBar(); resolvePendingRates(); });
+window.addEventListener('offline', updateOfflineBar);
+
+fbAuth.onAuthStateChanged(user => {
+  if (user) {
+    userEmail = user.email || '';
+    startApp();
+  } else {
+    document.getElementById('appScreen').classList.remove('active');
+    document.getElementById('loginScreen').classList.add('active');
+  }
+});
+
+function loginWithGoogle() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  fbAuth.signInWithPopup(provider).catch(err => {
+    showToast('Помилка входу: ' + err.message, 'err');
+  });
+}
     let appStarted = false;
     async function startApp() {
       document.getElementById('loginScreen').classList.remove('active');
@@ -1544,41 +1527,25 @@
       }
 
       if (appStarted) return;
-      appStarted = true;
-      initCarouselSwipe(); initPTR();
-      tokenRefreshDone = false;
-      setInterval(checkTokenExpiry, 18000000);
+appStarted = true;
+initCarouselSwipe(); initPTR();
     }
 
-    function checkTokenExpiry() {
-      if (!accessToken || tokenRefreshDone) return;
-      try {
-        const pl = JSON.parse(atob(accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-        if ((pl.exp || 0) < Math.floor(Date.now() / 1000)) {
-          tokenRefreshDone = true;
-          accessToken = ''; localStorage.removeItem('gToken');
-          document.getElementById('appScreen').classList.remove('active');
-          document.getElementById('loginScreen').classList.add('active');
-          // Re-init the sign-in button (manual click only — no silent prompt)
-          google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleCred });
-          document.getElementById('googleBtn').innerHTML = '';
-          google.accounts.id.renderButton(document.getElementById('googleBtn'), { theme: 'filled_black', size: 'large', width: 300 });
-        }
-      } catch (e) { }
-    }
+    
 
     // ── API ──
     async function api(payload) {
-      if (!accessToken) throw new Error('Not authenticated');
-      payload._token = accessToken;
-      const r = await fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      const data = await r.json();
-      if (data.status === 'error' && /токен|token/i.test(data.message || '')) {
-        checkTokenExpiry(); throw new Error(data.message);
-      }
-      return data;
-    }
+  if (!fbAuth.currentUser) throw new Error('Not authenticated');
+  const freshToken = await fbAuth.currentUser.getIdToken(); // SDK сам оновлює тихо, якщо потрібно
+  payload._token = freshToken;
+  const r = await fetch(SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const data = await r.json();
+  if (data.status === 'error' && /токен|token/i.test(data.message || '')) {
+    throw new Error(data.message); // якщо Apps Script все ж відхилив токен — просто показуємо помилку, без ручного розлогінювання
+  }
+  return data;
+}
 
     // ── Settings ──
     function categoriesOrderFixed(type) {
