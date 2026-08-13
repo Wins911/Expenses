@@ -1336,8 +1336,11 @@
       appId: "1:13956715599:web:6108fca9253c930e2c863a"
     };
     firebase.initializeApp(firebaseConfig);
-    const fbAuth = firebase.auth();
-    const fbDb = firebase.firestore();
+const fbAuth = firebase.auth();
+fbAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(err => {
+  console.warn('Не вдалось встановити LOCAL persistence:', err.code);
+});
+const fbDb = firebase.firestore();
 
     fbDb.enablePersistence({ synchronizeTabs: true }).catch(err => {
       console.warn('Firestore offline persistence не увімкнено:', err.code);
@@ -1804,8 +1807,7 @@ initCarouselSwipe(); initPTR();
 
       const btn = document.getElementById('saveBtn');
       btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Збереження…';
-      if (!navigator.onLine) { offlineQueue.push(payload); saveQueue(); showToast('⚡ Збережено офлайн', 'info'); afterSave(btn); return; }
-
+      
       try {
         // ── Резолвимо/створюємо ID для валюти, опису, підкатегорії ──
         const currencyId = (selectedCur?.id && selectedCur.id !== '__other__')
@@ -2147,8 +2149,9 @@ initCarouselSwipe(); initPTR();
     }
 
     async function saveEdit() {
-      if (!editRec) return;
-      if (eCurSel === '__other__' && !document.getElementById('eCurOther')?.value.trim()) { showToast('Вкажіть валюту', 'err'); return; }
+  if (!editRec) return;
+  const eCurSel = document.getElementById('eCur').value;
+  if (eCurSel === '__other__' && !document.getElementById('eCurOther')?.value.trim()) { showToast('Вкажіть валюту', 'err'); return; }
       const btn = document.getElementById('editSaveBtn');
       btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Збереження…';
       const isoDate = document.getElementById('eDate').value; // Формат YYYY-MM-DD
@@ -2159,7 +2162,6 @@ initCarouselSwipe(); initPTR();
       const collection = editRec._t === 'exp' ? 'expenses' : editRec._t === 'inc' ? 'income' : 'business';
 
       try {
-        const eCurSel = document.getElementById('eCur').value;
         let currencyId, curCode;
 
         if (eCurSel === '__other__') {
