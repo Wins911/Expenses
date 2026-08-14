@@ -10,8 +10,7 @@
   <title>Firebase Сімейний бюджет</title>
   <link rel="manifest" href="../manifest.json" />
   <link rel="icon" href="../favicon-32x32.ico" />
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -1111,9 +1110,9 @@
     <header>
       <div class="h-title">💰 Бюджет</div>
       <div class="h-right">
-        <div class="sync-btn" id="syncBtn" onclick="syncOffline(); resolvePendingRates()">🔄<span class="sync-cnt"
-            id="syncCnt"></span></div>
-        <div class="h-user" id="userBadge"></div>
+<div class="sync-btn" id="syncBtn" onclick="resolvePendingRates()">🔄<span class="sync-cnt"
+        id="syncCnt"></span></div>
+        <div class="h-user" id="userBadge" onclick="logoutUser()" style="cursor:pointer" title="Натисніть щоб вийти"></div>
       </div>
     </header>
 
@@ -1324,8 +1323,7 @@
 
   <script>
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzlgLTYfaJnR4SpUgAdu3xoklo699P-TcULLlEQsTQKQTsM6ySGPkjl7kmrzX_KWjwlkA/exec';
-    const GOOGLE_CLIENT_ID = '647272988527-nuhp8d8iut2t4u7384e41cm1bejn8m38.apps.googleusercontent.com';
-
+    
     // ── Firebase (крок 1 — лише підключення й перевірка, дані поки в Sheets) ──
     const firebaseConfig = {
       apiKey: "AIzaSyDMjN7RR1xQh6aKMsr0A9LaloMh09GnAEM",
@@ -1347,17 +1345,7 @@ const fbDb = firebase.firestore();
       // failed-precondition — відкрито в кількох вкладках без synchronizeTabs (не критично)
       // unimplemented — старий браузер без підтримки (не критично)
     });
-
-  
-
-
-    // Префікси UUID — має збігатися з ALLOWED_USERS в Code.gs
-    const FILTER_SHEETS = { monthly: 'Monthly Overview', annual: 'Annual Overview', analyz: 'Аналіз' };
-    const FILTER_CELLS = {
-      monthly: { month: 'K4', year: 'K6', category: 'K8' },
-      annual: { month: 'B16', year: 'B20' },
-      analyz: { month: 'C5', year: 'F5', category: 'B47' }
-    };
+    
     const TAB_CFG = {
       exp: { label: 'Зберегти витрату', cls: 'exp', sheet: 'expenses' },
       inc: { label: 'Зберегти дохід', cls: 'inc', sheet: 'income' },
@@ -1370,9 +1358,9 @@ const fbDb = firebase.firestore();
     // стовпці товщі/тонші — не впливає на кількість чи компонування. ═══
     const MAX_BAR_THICKNESS = 26; // px
 
-    let accessToken = '', userEmail = '';
+    let userEmail = '';
     let addTab = 'exp', anTab = 'monthly', rFilter = 'all', selectedCur = 'UAH';
-    let allRecords = [], editRec = null, offlineQueue = JSON.parse(localStorage.getItem('offlineQ') || '[]');
+    let allRecords = [], editRec = null;
     let pendingRates = JSON.parse(localStorage.getItem('pendingRates') || '[]');
     function savePendingRates() {
       localStorage.setItem('pendingRates', JSON.stringify(pendingRates));
@@ -1402,11 +1390,7 @@ const fbDb = firebase.firestore();
       'currencies', 'months', 'counters'
     ];
 
-    function categoriesOrderFixed(type) {
-      const dictName = type === 'exp' ? 'expenseCategories' : 'incomeCategories';
-      const dict = dictionaries[dictName] || {};
-      return Object.keys(dict).sort().map(id => dict[id]);
-    }
+    
 
     async function loadDictionaries() {
       try {
@@ -1507,6 +1491,11 @@ function loginWithGoogle() {
     showToast('Помилка входу: ' + err.message, 'err');
   });
 }
+function logoutUser() {
+  if (!confirm('Вийти з акаунту?')) return;
+  fbAuth.signOut();
+}
+    
     let appStarted = false;
     async function startApp() {
       document.getElementById('loginScreen').classList.remove('active');
@@ -1901,12 +1890,10 @@ initCarouselSwipe(); initPTR();
     }
 
     // ── Offline ──
-    function saveQueue() { localStorage.setItem('offlineQ', JSON.stringify(offlineQueue)); updateSyncBadge(); }
     function updateSyncBadge() {
-      const total = offlineQueue.length + pendingRates.length;
-      const c = document.getElementById('syncCnt');
-      c.textContent = total; c.classList.toggle('show', total > 0);
-    }
+  const c = document.getElementById('syncCnt');
+  c.textContent = pendingRates.length; c.classList.toggle('show', pendingRates.length > 0);
+}
     async function resolvePendingRates() {
       if (!navigator.onLine || !pendingRates.length) return;
       const remaining = [];
@@ -1936,21 +1923,6 @@ initCarouselSwipe(); initPTR();
       if (remaining.length === 0) showToast('✓ Курси розраховано', 'ok');
     }
 
-    async function syncOffline() {
-      if (!navigator.onLine) { showToast('Немає з\'єднання', 'err'); return; }
-      if (!offlineQueue.length) { showToast('Нічого синхронізувати', 'info'); return; }
-      showToast(`Синхронізація ${offlineQueue.length} записів…`, 'info');
-      let ok = 0; const failed = [];
-      for (const item of offlineQueue) {
-        try {
-          const r = await api(item);
-          if (r.status === 'ok') { ok++; if (item.offline && r.row) api({ action: 'resolveOfflineRate', sheet: item.sheet, row: r.row, currency: item.currency, date: item.date }).catch(() => { }); }
-          else failed.push(item);
-        } catch (e) { failed.push(item); }
-      }
-      offlineQueue = failed; saveQueue(); cSet('records', null);
-      showToast(ok ? `✓ Синхронізовано: ${ok}${failed.length ? ', помилок: ' + failed.length : ''}` : 'Помилка', 'ok');
-    }
     function updateOfflineBar() { document.getElementById('offlineBar').classList.toggle('show', !navigator.onLine); }
 
     // ── Records ──
@@ -2290,24 +2262,16 @@ initCarouselSwipe(); initPTR();
       try { localStorage.setItem('anFiltersCache', JSON.stringify(anFilters)); } catch (e) { }
     }
     async function initAnalytics() {
-      setSlide(0);
-      ['slide0', 'slide1', 'slide2'].forEach(id => { document.getElementById(id).innerHTML = '<div class="chart-loading">Завантаження…</div>'; });
-      await ensureRecordsLoaded();
-      const cached = loadCachedAnFilters();
-      if (cached) {
-        anFilters = cached; // миттєво, без запиту до сервера
-      } else {
-        // Лише один раз (перший запуск) — підтягуємо дефолти з листів Sheets
-        try {
-          const fr = await api({ action: 'getFilters' });
-          if (fr.status === 'ok') anFilters = fr;
-        } catch (e) {/* офлайн — дефолти нижче */ }
-      }
-      ensureFilterDefaults();
-      buildFilterUi();
-      renderAnTab(anTab);
-      saveCachedAnFilters();
-    }
+  setSlide(0);
+  ['slide0', 'slide1', 'slide2'].forEach(id => { document.getElementById(id).innerHTML = '<div class="chart-loading">Завантаження…</div>'; });
+  await ensureRecordsLoaded();
+  const cached = loadCachedAnFilters();
+  if (cached) anFilters = cached;
+  ensureFilterDefaults();
+  buildFilterUi();
+  renderAnTab(anTab);
+  saveCachedAnFilters();
+}
     async function ensureRecordsLoaded() {
       if (allRecords.length) return;
       const cached = await cGet('records');
@@ -2417,19 +2381,7 @@ initCarouselSwipe(); initPTR();
       };
     }
 
-    function buildCategoryStack(records) {
-      const cats = [...new Set(records.map(r => r.category))];
-      return cats.map(cat => {
-        const items = records.filter(r => r.category === cat);
-        const map = {};
-        items.forEach(r => {
-          const k = r.subcategory ? r.subcategory : 'Без підкатегорії';
-          map[k] = (map[k] || 0) + usdOf(r);
-        });
-        return { category: cat, segments: Object.entries(map).sort((a, b) => b[1] - a[1]) };
-      }).filter(c => c.segments.reduce((s, [, v]) => s + v, 0) > 0)
-        .sort((a, b) => b.segments.reduce((s, [, v]) => s + v, 0) - a.segments.reduce((s, [, v]) => s + v, 0));
-    }
+    
 
     function computeAnnualData(startMonthName, startYear) {
       const months = rollingMonths(startMonthName, startYear);
@@ -2619,38 +2571,7 @@ initCarouselSwipe(); initPTR();
       }, 50); return card;
     }
 
-    const STACK_COLORS = ['#f0566a', '#f5a623', '#4d8ef0', '#34c77b', '#9b59b6', '#1abc9c', '#e67e22'];
-
-    function makeStackedHBar(id, title, stack) {
-      const { wrap, c } = fillCanvas(id); const card = cardWrap(title, wrap);
-      if (!stack || !stack.length) { wrap.innerHTML = '<div style="text-align:center;color:var(--sub);padding:32px 0">Немає даних</div>'; return card; }
-      const labels = stack.map(s => s.category);
-      const allSegs = [...new Set(stack.flatMap(s => s.segments.map(([n]) => n)))];
-      const datasets = allSegs.map((segName, i) => ({
-        label: segName,
-        data: stack.map(s => { const f = s.segments.find(([n]) => n === segName); return f ? f[1] : 0; }),
-        backgroundColor: STACK_COLORS[i % STACK_COLORS.length],
-        borderRadius: 2, maxBarThickness: MAX_BAR_THICKNESS
-      }));
-      setTimeout(() => {
-        destroyChart(id);
-        charts[id] = new Chart(c, {
-          type: 'bar', data: { labels, datasets }, options: {
-            indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-            layout: { padding: { left: 4, right: 16, top: 4, bottom: 4 } },
-            scales: {
-              x: { stacked: true, ticks: { color: '#7b83a0', font: { size: 10 } }, grid: { color: '#2e3650' } },
-              y: { stacked: true, ticks: { color: '#e4e8f4', font: { size: 11 }, autoSkip: false }, grid: { color: '#2e3650' } }
-            },
-            plugins: {
-              legend: { display: false },
-              tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: $${(+ctx.parsed.x).toFixed(2)}` } }
-            }
-          }
-        });
-      }, 50);
-      return card;
-    }
+    
 
     // Compare 2-value horizontal bar (analyz)
     function makeHBar2(id, title, sheetData, type) {
