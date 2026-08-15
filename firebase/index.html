@@ -1556,15 +1556,7 @@ initCarouselSwipe(); initPTR();
         .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)); // за частотою, при рівності — за ID
     }
     // Повертає масив назв (для автопідказки опису/підкатегорії — пошук по тексту)
-    function descs(t) {
-      const dictName = t === 'exp' ? 'expenseDescriptions' : t === 'inc' ? 'incomeDescriptions' : 'businessDescriptions';
-      const dict = dictionaries[dictName] || {};
-      const freq = {};
-      allRecords.forEach(r => { if (r._t === t && r.descId) freq[r.descId] = (freq[r.descId] || 0) + 1; });
-      return Object.entries(dict)
-        .sort((a, b) => (freq[b[0]] || 0) - (freq[a[0]] || 0))
-        .map(([, name]) => name);
-    }
+    
     function subcatNames() {
       const dict = dictionaries.expenseSubcategories || {};
       return Object.values(dict);
@@ -1833,16 +1825,18 @@ initCarouselSwipe(); initPTR();
           }
         }
         let rateUSD = 1, rateUAH = 1, rateResolved = true;
-        try {
-          const rateResp = await api({ action: 'getRateSync', currency: cur, to: 'USD', date });
-          rateUSD = rateResp.rate || 1;
-          if (addTab === 'biz') {
-            const rateRespUAH = await api({ action: 'getRateSync', currency: cur, to: 'UAH', date });
-            rateUAH = rateRespUAH.rate || 1;
-          }
-        } catch (e) {
-          rateResolved = false; // немає мережі до Apps Script — дорахуємо пізніше
-        }
+try {
+  if (cur !== 'USD') {
+    const rateResp = await api({ action: 'getRateSync', currency: cur, to: 'USD', date });
+    rateUSD = rateResp.rate || 1;
+  }
+  if (addTab === 'biz' && cur !== 'UAH') {
+    const rateRespUAH = await api({ action: 'getRateSync', currency: cur, to: 'UAH', date });
+    rateUAH = rateRespUAH.rate || 1;
+  }
+} catch (e) {
+  rateResolved = false;
+}
         const amountUSD = +amt * rateUSD;
         const amountUAH = +amt * rateUAH;
 
@@ -2109,17 +2103,7 @@ initCarouselSwipe(); initPTR();
       if (sel === '__other__') { other.classList.add('show'); other.focus(); }
       else { other.classList.remove('show'); }
     }
-    function editActiveCur() {
-      const eCurSel = document.getElementById('eCur');
-      if (!eCurSel) return null;
-      const val = eCurSel.value;
-      if (val === '__other__') {
-        return (document.getElementById('eCurOther')?.value || '').trim().toUpperCase();
-      }
-      // Перетворюємо ID валюти (напр. Cur01) на її ISO-код (напр. USD, EUR) через довідник
-      return resolveName('currencies', val) || val;
-    }
-
+    
     async function saveEdit() {
   if (!editRec) return;
   const eCurSel = document.getElementById('eCur').value;
