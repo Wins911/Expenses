@@ -10,8 +10,7 @@
   <title>Firebase Сімейний бюджет</title>
   <link rel="manifest" href="../manifest.json" />
   <link rel="icon" href="../favicon-32x32.ico" />
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -1336,6 +1335,9 @@
     };
     firebase.initializeApp(firebaseConfig);
 const fbAuth = firebase.auth();
+fbAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(err => {
+  console.warn('Не вдалось встановити LOCAL persistence:', err.code);
+});
 const fbDb = firebase.firestore();
 
     fbDb.enablePersistence({ synchronizeTabs: true }).catch(err => {
@@ -2792,6 +2794,9 @@ initCarouselSwipe(); initPTR();
       clearTimeout(toastT); toastT = setTimeout(() => t.className = 'toast', 2800);
     }
   </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+<script>eruda.init();</script>
 </body>
 
 </html>
